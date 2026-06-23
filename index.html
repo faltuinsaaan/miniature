@@ -72,9 +72,10 @@
 				<div class="help-section">
 					<h3>Shortcuts</h3>
 					<ul>
-						<li><kbd>R</kbd> Rotate block (90°)</li>
-						<li><kbd>Delete</kbd> / <kbd>Backspace</kbd> Remove block</li>
-						<li><kbd>Esc</kbd> Deselect item</li>
+						<li><kbd>R</kbd> / <kbd>Q</kbd> Rotate 45° (↻/↺)</li>
+						<li><kbd>M</kbd> Pick Up / Move</li>
+						<li><kbd>Delete</kbd> / <kbd>Backspace</kbd> Remove</li>
+						<li><kbd>Esc</kbd> Cancel / Deselect</li>
 						<li><kbd>Drag</kbd> Orbit camera</li>
 						<li><kbd>Shift + Drag</kbd> Pan camera</li>
 					</ul>
@@ -137,6 +138,14 @@
 						</div>
 					</div>
 
+					<div class="property-group">
+						<label for="prop-rotation">Rotation Angle:</label>
+						<div class="color-picker-wrapper">
+							<input type="range" id="prop-rotation" min="0" max="315" step="45" value="0" style="flex: 1; accent-color: var(--color-mint); cursor: pointer;">
+							<span id="prop-rotation-label" class="hex-label" style="min-width: 45px; text-align: right;">0°</span>
+						</div>
+					</div>
+
 					<div class="property-group" id="prop-material-group">
 						<label for="prop-material">Material Finish:</label>
 						<select id="prop-material" class="styled-select">
@@ -149,8 +158,16 @@
 					</div>
 
 					<div class="property-group flex-row">
-						<button id="btn-prop-rotate" class="btn btn-secondary flex-1">🔄 Rotate (R)</button>
-						<button id="btn-prop-delete" class="btn btn-danger flex-1">🗑️ Delete (Del)</button>
+						<button id="btn-prop-move" class="btn btn-secondary flex-1" title="Pick up block to move and place elsewhere (M)">📦 Pick Up & Move (M)</button>
+					</div>
+
+					<div class="property-group flex-row">
+						<button id="btn-prop-rotate-ccw" class="btn btn-secondary flex-1" title="Rotate 45 degrees counter-clockwise (Q)">↺ Rotate (Q)</button>
+						<button id="btn-prop-rotate-cw" class="btn btn-secondary flex-1" title="Rotate 45 degrees clockwise (R)">↻ Rotate (R)</button>
+					</div>
+
+					<div class="property-group flex-row">
+						<button id="btn-prop-delete" class="btn btn-danger flex-1" title="Delete selected block (Del)">🗑️ Delete (Del)</button>
 					</div>
 				</div>
 			</aside>

@@ -241,6 +241,9 @@ export class DioramaBuilder {
 			audio.playPlaceWood();
 		}
 
+		// Clear move metadata upon successful drop
+		this.moveOriginalData = null;
+
 		// Trigger active lamp light updates
 		window.dispatchEvent(new CustomEvent('diorama-changed'));
 	}
@@ -263,19 +266,91 @@ export class DioramaBuilder {
 		this.onSelectionChanged(null);
 	}
 
-	rotateActiveBlock() {
+	pickUpSelected() {
+		if (!this.selectedMesh) return;
+		const data = this.selectedMesh.userData;
+		this.moveOriginalData = {
+			item: data.catalogItem,
+			color: data.color,
+			matType: data.matType,
+			rotation: data.rotation,
+			position: this.selectedMesh.position.clone()
+		};
+		// Detach from scene
+		this.dioramaGroup.remove(this.selectedMesh);
+		this.deselectBlock();
+		// Enter place mode
+		this.activeItem = this.moveOriginalData.item;
+		this.activeColor = this.moveOriginalData.color;
+		this.activeMatType = this.moveOriginalData.matType;
+		this.currentRotation = this.moveOriginalData.rotation;
+		this.createPreviewMesh();
+		
+		audio.playClick();
+		this.onToolChanged(`Moving: ${this.activeItem.name}`);
+	}
+
+	cancelMove() {
+		if (this.moveOriginalData) {
+			const d = this.moveOriginalData;
+			// Rebuild and place at original position
+			const mesh = d.item.createMesh(d.color, d.matType);
+			mesh.position.copy(d.position);
+			mesh.rotation.y = d.rotation;
+			mesh.traverse(child => {
+				if (child.isMesh) {
+					child.castShadow = true;
+					child.receiveShadow = true;
+				}
+			});
+			if (d.item.id === 'glowing_lamp') {
+				const light = new THREE.PointLight('#ffeaad', 0, 4);
+				light.position.set(0, 0.36, 0);
+				light.castShadow = true;
+				mesh.add(light);
+				mesh.userData.light = light;
+			}
+			mesh.userData = {
+				catalogItem: d.item,
+				color: d.color,
+				matType: d.matType,
+				rotation: d.rotation,
+				light: mesh.userData.light
+			};
+			this.dioramaGroup.add(mesh);
+			this.moveOriginalData = null;
+			window.dispatchEvent(new CustomEvent('diorama-changed'));
+		}
+	}
+
+	setSelectedRotation(rad) {
+		if (!this.selectedMesh) return;
+		this.selectedMesh.rotation.y = rad;
+		this.selectedMesh.userData.rotation = rad;
+		this.boxHelper.setFromObject(this.selectedMesh);
+		audio.playPlaceWood();
+		window.dispatchEvent(new CustomEvent('diorama-changed'));
+	}
+
+	rotateActiveBlock(clockwise = true) {
+		const step = Math.PI / 4; // 45 degrees
+		const dir = clockwise ? 1 : -1;
+		
 		if (this.activeItem) {
 			// Rotating preview block
-			this.currentRotation = (this.currentRotation + Math.PI / 2) % (Math.PI * 2);
+			this.currentRotation = (this.currentRotation + step * dir + Math.PI * 2) % (Math.PI * 2);
 			this.previewGroup.rotation.y = this.currentRotation;
 			audio.playClick();
 		} else if (this.selectedMesh) {
 			// Rotating selected block
-			const newRot = (this.selectedMesh.rotation.y + Math.PI / 2) % (Math.PI * 2);
+			const newRot = (this.selectedMesh.rotation.y + step * dir + Math.PI * 2) % (Math.PI * 2);
 			this.selectedMesh.rotation.y = newRot;
 			this.selectedMesh.userData.rotation = newRot;
 			this.boxHelper.setFromObject(this.selectedMesh);
 			audio.playPlaceWood();
+
+			// Dispatch event to update the properties panel rotation display
+			this.onSelectionChanged(this.selectedMesh.userData);
 		}
 	}
 
@@ -483,14 +558,22 @@ export class DioramaBuilder {
 			
 			// Ignore typing in input fields (color pickers, property fields)
 			if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') {
-				return;
+				if (key !== 'escape') return;
 			}
 
 			if (key === 'r') {
-				this.rotateActiveBlock();
+				// Rotate: clockwise (true) by default, counter-clockwise (false) if Shift held
+				this.rotateActiveBlock(!e.shiftKey);
+			} else if (key === 'q') {
+				// Q for counter-clockwise rotation
+				this.rotateActiveBlock(false);
+			} else if (key === 'm') {
+				// M to pick up/move the selected block
+				this.pickUpSelected();
 			} else if (key === 'delete' || key === 'backspace') {
 				this.deleteSelected();
 			} else if (key === 'escape') {
+				this.cancelMove();
 				this.deselectBlock();
 				this.setSelectMode();
 			}

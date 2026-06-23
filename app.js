@@ -222,6 +222,11 @@ function onSelectionChanged(userData) {
 	colorInput.value = userData.color;
 	document.getElementById('prop-color-hex').textContent = userData.color.toUpperCase();
 
+	// Set rotation slider
+	const deg = Math.round((userData.rotation * 180) / Math.PI) % 360;
+	document.getElementById('prop-rotation').value = deg;
+	document.getElementById('prop-rotation-label').textContent = `${deg}°`;
+
 	// Select mat type
 	const matSelect = document.getElementById('prop-material');
 	matSelect.value = userData.matType;
@@ -372,12 +377,30 @@ function setupUIEvents() {
 		builder.updateSelectedColor(val);
 	});
 
+	// Rotation Slider change
+	const propRotation = document.getElementById('prop-rotation');
+	propRotation.addEventListener('input', (e) => {
+		const val = parseInt(e.target.value, 10);
+		document.getElementById('prop-rotation-label').textContent = `${val}°`;
+		builder.setSelectedRotation((val * Math.PI) / 180);
+	});
+
 	document.getElementById('prop-material').addEventListener('change', (e) => {
 		builder.updateSelectedMatType(e.target.value);
 	});
 
-	document.getElementById('btn-prop-rotate').addEventListener('click', () => {
-		builder.rotateActiveBlock();
+	// Move Button
+	document.getElementById('btn-prop-move').addEventListener('click', () => {
+		builder.pickUpSelected();
+	});
+
+	// Rotate CW/CCW Buttons
+	document.getElementById('btn-prop-rotate-cw').addEventListener('click', () => {
+		builder.rotateActiveBlock(true);
+	});
+
+	document.getElementById('btn-prop-rotate-ccw').addEventListener('click', () => {
+		builder.rotateActiveBlock(false);
 	});
 
 	document.getElementById('btn-prop-delete').addEventListener('click', () => {
