@@ -20,6 +20,12 @@ export class DioramaBuilder {
 		this.currentRotation = 0; // Rotations in radians (0, PI/2, PI, 3PI/2)
 		this.gridSize = 0.5; // Snap grid size
 		this.gridEnabled = true;
+		this.gridMinX = -4;
+		this.gridMaxX = 4;
+		this.gridMinZ = -4;
+		this.gridMaxZ = 4;
+		this.moveOriginalData = null;
+		this.draggingHandle = null;
 
 		// Groups & Helpers
 		this.dioramaGroup = new THREE.Group();
@@ -33,13 +39,90 @@ export class DioramaBuilder {
 		this.boxHelper.visible = false;
 		this.scene.add(this.boxHelper);
 
+		// 3D Expand Handles Group
+		this.handlesGroup = new THREE.Group();
+		this.scene.add(this.handlesGroup);
+
 		// Invisible plane at y=0 for raycast fallback
 		this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 		this.raycaster = new THREE.Raycaster();
 		this.mouse = new THREE.Vector2();
 
 		// Bind events
+		this.createHandles();
 		this.setupEvents();
+	}
+
+	createHandles() {
+		// Clean up existing handles if any
+		while(this.handlesGroup.children.length > 0) {
+			this.handlesGroup.remove(this.handlesGroup.children[0]);
+		}
+
+		const arrowGeo = new THREE.ConeGeometry(0.15, 0.4, 4);
+		const shaftGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.25, 4);
+		const handleMat = new THREE.MeshStandardMaterial({
+			color: '#67a390',
+			roughness: 0.4,
+			metalness: 0.1,
+			emissive: '#253d36',
+			emissiveIntensity: 0.5
+		});
+
+		const dirs = ['east', 'west', 'north', 'south'];
+		this.handles = {};
+
+		dirs.forEach(dir => {
+			const group = new THREE.Group();
+			
+			const cone = new THREE.Mesh(arrowGeo, handleMat);
+			cone.position.y = 0.2;
+			cone.castShadow = true;
+			
+			const shaft = new THREE.Mesh(shaftGeo, handleMat);
+			shaft.position.y = 0.0;
+			shaft.castShadow = true;
+
+			group.add(cone, shaft);
+			
+			// Rotate to point outwards from base center
+			if (dir === 'east') {
+				group.rotation.z = -Math.PI / 2;
+			} else if (dir === 'west') {
+				group.rotation.z = Math.PI / 2;
+			} else if (dir === 'north') {
+				group.rotation.x = -Math.PI / 2;
+			} else if (dir === 'south') {
+				group.rotation.x = Math.PI / 2;
+			}
+
+			group.userData = { isHandle: true, direction: dir };
+			this.handles[dir] = group;
+			this.handlesGroup.add(group);
+		});
+
+		this.updateHandlesPosition();
+	}
+
+	updateHandlesPosition() {
+		if (!this.handles) return;
+		const offset = 0.6; // distance outward from the grid border
+
+		const centerX = (this.gridMinX + this.gridMaxX) / 2;
+		const centerZ = (this.gridMinZ + this.gridMaxZ) / 2;
+
+		this.handles['east'].position.set(this.gridMaxX + offset, 0.1, centerZ);
+		this.handles['west'].position.set(this.gridMinX - offset, 0.1, centerZ);
+		this.handles['north'].position.set(centerX, 0.1, this.gridMinZ - offset);
+		this.handles['south'].position.set(centerX, 0.1, this.gridMaxZ + offset);
+	}
+
+	setGridLimits(minX, maxX, minZ, maxZ) {
+		this.gridMinX = minX;
+		this.gridMaxX = maxX;
+		this.gridMinZ = minZ;
+		this.gridMaxZ = maxZ;
+		this.updateHandlesPosition();
 	}
 
 	// --- Mode Toggles ---
@@ -162,32 +245,77 @@ export class DioramaBuilder {
 	calcPlacementPosition(mousePos) {
 		let x = this.snap(mousePos.point.x);
 		let z = this.snap(mousePos.point.z);
-		let y = 0.05; // standard floor height offset
+		let y = 0.0; // standard floor height offset
+
+		const placingItem = this.activeItem || (mousePos.object ? mousePos.object.userData.catalogItem : null);
 
 		if (mousePos.object) {
 			const item = mousePos.object.userData.catalogItem;
 			const pos = mousePos.object.position;
+			const rot = mousePos.object.rotation.y;
+
+			// Calculate rotated width and depth projections for both clicked and placing items
+			const w_clicked = Math.abs(item.width * Math.cos(rot)) + Math.abs(item.depth * Math.sin(rot));
+			const d_clicked = Math.abs(item.width * Math.sin(rot)) + Math.abs(item.depth * Math.cos(rot));
+
+			const w_active = this.activeItem ? Math.abs(this.activeItem.width * Math.cos(this.currentRotation)) + Math.abs(this.activeItem.depth * Math.sin(this.currentRotation)) : item.width;
+			const d_active = this.activeItem ? Math.abs(this.activeItem.width * Math.sin(this.currentRotation)) + Math.abs(this.activeItem.depth * Math.cos(this.currentRotation)) : item.depth;
 
 			if (mousePos.normal.y > 0.7) {
 				// Clicked on a top face -> stack on top
-				y = pos.y + item.height;
+				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : pos.y + item.height;
 			} else if (Math.abs(mousePos.normal.x) > 0.7) {
 				// Clicked on side face X -> snap adjacent
-				x = this.snap(pos.x + (mousePos.normal.x > 0 ? item.width/2 + this.activeItem.width/2 : -item.width/2 - this.activeItem.width/2));
-				y = pos.y;
+				x = this.snap(pos.x + (mousePos.normal.x > 0 ? w_clicked/2 + w_active/2 : -w_clicked/2 - w_active/2));
+				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : pos.y;
 			} else if (Math.abs(mousePos.normal.z) > 0.7) {
 				// Clicked on side face Z -> snap adjacent
-				z = this.snap(pos.z + (mousePos.normal.z > 0 ? item.depth/2 + this.activeItem.depth/2 : -item.depth/2 - this.activeItem.depth/2));
-				y = pos.y;
+				z = this.snap(pos.z + (mousePos.normal.z > 0 ? d_clicked/2 + d_active/2 : -d_clicked/2 - d_active/2));
+				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : pos.y;
 			}
 		}
 
-		// Keep elements centered inside boundaries of table (-4 to +4)
-		const halfW = this.activeItem ? this.activeItem.width / 2 : 0;
-		const halfD = this.activeItem ? this.activeItem.depth / 2 : 0;
-		x = Math.max(-4 + halfW, Math.min(4 - halfW, x));
-		z = Math.max(-4 + halfD, Math.min(4 - halfD, z));
-		y = Math.max(0.05, y);
+		// Keep elements centered inside boundaries of table (gridMinX to gridMaxX)
+		const gridMinX = this.gridMinX !== undefined ? this.gridMinX : -4;
+		const gridMaxX = this.gridMaxX !== undefined ? this.gridMaxX : 4;
+		const gridMinZ = this.gridMinZ !== undefined ? this.gridMinZ : -4;
+		const gridMaxZ = this.gridMaxZ !== undefined ? this.gridMaxZ : 4;
+		let wRotated = 0.5;
+		let dRotated = 0.5;
+		
+		if (this.activeItem) {
+			wRotated = Math.abs(this.activeItem.width * Math.cos(this.currentRotation)) + Math.abs(this.activeItem.depth * Math.sin(this.currentRotation));
+			dRotated = Math.abs(this.activeItem.width * Math.sin(this.currentRotation)) + Math.abs(this.activeItem.depth * Math.cos(this.currentRotation));
+		}
+		
+		const halfW = wRotated / 2;
+		const halfD = dRotated / 2;
+		x = Math.max(gridMinX + halfW, Math.min(gridMaxX - halfW, x));
+		z = Math.max(gridMinZ + halfD, Math.min(gridMaxZ - halfD, z));
+		y = Math.max(0.0, y);
+
+		// Corner snapping adjustment for preview of walls: Z-walls (vertical) butt into perpendicular X-walls (horizontal)
+		if (placingItem && placingItem.id.startsWith('wall_')) {
+			const A_is_X = Math.abs(Math.cos(this.currentRotation)) > 0.7;
+			if (!A_is_X) {
+				this.dioramaGroup.children.forEach(mesh => {
+					const B_item = mesh.userData.catalogItem;
+					if (B_item && B_item.id.startsWith('wall_') && mesh !== mousePos.object) {
+						const B_pos = mesh.position;
+						const B_rot = mesh.rotation.y;
+						const B_is_X = Math.abs(Math.cos(B_rot)) > 0.7;
+						if (B_is_X) {
+							const offset = B_item.id === 'wall_plain' ? 2.11 : 2.075;
+							if (Math.abs((z - 2) - B_pos.z) < 0.25 && Math.abs(x - B_pos.x) <= 2.1) {
+								z = B_pos.z + offset;
+							} else if (Math.abs((z + 2) - B_pos.z) < 0.25 && Math.abs(x - B_pos.x) <= 2.1) {
+								z = B_pos.z - offset;
+							}
+						}
+					}
+				});
+			}
+		}
 
 		return new THREE.Vector3(x, y, z);
 	}
@@ -332,6 +460,68 @@ export class DioramaBuilder {
 		window.dispatchEvent(new CustomEvent('diorama-changed'));
 	}
 
+	getRotatedDimensions(mesh) {
+		const item = mesh.userData.catalogItem;
+		if (!item) return { width: 0.5, depth: 0.5 };
+		const rot = mesh.rotation.y;
+		const wRotated = Math.abs(item.width * Math.cos(rot)) + Math.abs(item.depth * Math.sin(rot));
+		const dRotated = Math.abs(item.width * Math.sin(rot)) + Math.abs(item.depth * Math.cos(rot));
+		return { width: wRotated, depth: dRotated };
+	}
+
+	setSelectedPosX(x) {
+		if (!this.selectedMesh) return;
+		const dims = this.getRotatedDimensions(this.selectedMesh);
+		const halfW = dims.width / 2;
+		const clampedX = Math.max(this.gridMinX + halfW, Math.min(this.gridMaxX - halfW, x));
+		this.selectedMesh.position.x = clampedX;
+		this.boxHelper.setFromObject(this.selectedMesh);
+		window.dispatchEvent(new CustomEvent('diorama-changed'));
+	}
+
+	setSelectedPosZ(z) {
+		if (!this.selectedMesh) return;
+		const dims = this.getRotatedDimensions(this.selectedMesh);
+		const halfD = dims.depth / 2;
+		const clampedZ = Math.max(this.gridMinZ + halfD, Math.min(this.gridMaxZ - halfD, z));
+		this.selectedMesh.position.z = clampedZ;
+		this.boxHelper.setFromObject(this.selectedMesh);
+		window.dispatchEvent(new CustomEvent('diorama-changed'));
+	}
+
+	nudgeSelectedPosX(amount) {
+		if (!this.selectedMesh) return;
+		const curX = this.selectedMesh.position.x;
+		this.setSelectedPosX(curX + amount);
+		audio.playPlaceWood();
+		this.onSelectionChanged(this.selectedMesh.userData);
+	}
+
+	nudgeSelectedPosZ(amount) {
+		if (!this.selectedMesh) return;
+		const curZ = this.selectedMesh.position.z;
+		this.setSelectedPosZ(curZ + amount);
+		audio.playPlaceWood();
+		this.onSelectionChanged(this.selectedMesh.userData);
+	}
+
+	setSelectedHeight(y) {
+		if (!this.selectedMesh) return;
+		const clampedY = Math.max(0.0, Math.min(5.0, y));
+		this.selectedMesh.position.y = clampedY;
+		this.boxHelper.setFromObject(this.selectedMesh);
+		window.dispatchEvent(new CustomEvent('diorama-changed'));
+	}
+
+	nudgeSelectedHeight(amount) {
+		if (!this.selectedMesh) return;
+		const curY = this.selectedMesh.position.y;
+		this.setSelectedHeight(curY + amount);
+		audio.playPlaceWood();
+		// Notify UI to refresh properties panel height display
+		this.onSelectionChanged(this.selectedMesh.userData);
+	}
+
 	rotateActiveBlock(clockwise = true) {
 		const step = Math.PI / 4; // 45 degrees
 		const dir = clockwise ? 1 : -1;
@@ -430,10 +620,10 @@ export class DioramaBuilder {
 	// --- Serialization ---
 
 	serializeScene() {
-		const data = [];
+		const blocks = [];
 		this.dioramaGroup.children.forEach(mesh => {
 			const item = mesh.userData.catalogItem;
-			data.push({
+			blocks.push({
 				id: item.id,
 				x: mesh.position.x,
 				y: mesh.position.y,
@@ -443,15 +633,49 @@ export class DioramaBuilder {
 				matType: mesh.userData.matType
 			});
 		});
-		return JSON.stringify(data);
+		return JSON.stringify({
+			gridMinX: this.gridMinX,
+			gridMaxX: this.gridMaxX,
+			gridMinZ: this.gridMinZ,
+			gridMaxZ: this.gridMaxZ,
+			blocks: blocks
+		});
 	}
 
 	deserializeScene(dataJson) {
 		try {
-			const data = JSON.parse(dataJson);
+			const parsed = JSON.parse(dataJson);
+			let blocks = [];
+			let gridMinX = -4;
+			let gridMaxX = 4;
+			let gridMinZ = -4;
+			let gridMaxZ = 4;
+
+			if (Array.isArray(parsed)) {
+				blocks = parsed;
+			} else {
+				blocks = parsed.blocks || [];
+				if (parsed.gridMinX !== undefined) {
+					gridMinX = parsed.gridMinX;
+					gridMaxX = parsed.gridMaxX;
+					gridMinZ = parsed.gridMinZ;
+					gridMaxZ = parsed.gridMaxZ;
+				} else {
+					const baseSizeX = parsed.baseSizeX || parsed.baseSize || 8;
+					const baseSizeZ = parsed.baseSizeZ || parsed.baseSize || 8;
+					gridMinX = -baseSizeX / 2;
+					gridMaxX = baseSizeX / 2;
+					gridMinZ = -baseSizeZ / 2;
+					gridMaxZ = baseSizeZ / 2;
+				}
+			}
+
+			// Reconstruct the base size by triggering event
+			window.dispatchEvent(new CustomEvent('baseplate-size-loaded', { detail: { minX: gridMinX, maxX: gridMaxX, minZ: gridMinZ, maxZ: gridMaxZ } }));
+
 			this.clearScene();
 
-			data.forEach(block => {
+			blocks.forEach(block => {
 				const item = catalog.find(i => i.id === block.id);
 				if (!item) return;
 
@@ -505,6 +729,56 @@ export class DioramaBuilder {
 		window.dispatchEvent(new CustomEvent('diorama-changed'));
 	}
 
+	adjustWallCorners() {
+		// Find all walls in the diorama
+		const walls = this.dioramaGroup.children.filter(mesh => {
+			const item = mesh.userData.catalogItem;
+			return item && item.id.startsWith('wall_');
+		});
+
+		// Reset all Z walls to their snapped grid positions first to clear old offsets
+		walls.forEach(mesh => {
+			const rot = mesh.rotation.y;
+			const isX = Math.abs(Math.cos(rot)) > 0.7;
+			if (!isX) {
+				mesh.position.z = Math.round(mesh.position.z / 0.5) * 0.5;
+			}
+		});
+
+		// Now apply butt joint offsets: Z-walls butt into perpendicular X-walls
+		walls.forEach(meshA => {
+			const rotA = meshA.rotation.y;
+			const isXA_check = Math.abs(Math.cos(rotA)) > 0.7;
+			if (!isXA_check) {
+				// meshA runs along Z
+				const x = meshA.position.x;
+				const z = meshA.position.z;
+				
+				walls.forEach(meshB => {
+					if (meshB === meshA) return;
+					const rotB = meshB.rotation.y;
+					const isXB = Math.abs(Math.cos(rotB)) > 0.7;
+					if (isXB) {
+						// meshB runs along X
+						const bx = meshB.position.x;
+						const bz = meshB.position.z;
+						const B_item = meshB.userData.catalogItem;
+						const offset = (B_item && B_item.id === 'wall_plain') ? 2.11 : 2.075;
+						
+						// Top end of A meets B
+						if (Math.abs((z - 2) - bz) < 0.25 && Math.abs(x - bx) <= 2.1) {
+							meshA.position.z = bz + offset;
+						}
+						// Bottom end of A meets B
+						else if (Math.abs((z + 2) - bz) < 0.25 && Math.abs(x - bx) <= 2.1) {
+							meshA.position.z = bz - offset;
+						}
+					}
+				});
+			}
+		});
+	}
+
 	// --- Event Binding ---
 
 	setupEvents() {
@@ -517,15 +791,62 @@ export class DioramaBuilder {
 			isMouseDown = true;
 			startX = e.clientX;
 			startY = e.clientY;
+
+			// Raycast handles first
+			const rect = this.domElement.getBoundingClientRect();
+			this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+			this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+			this.raycaster.setFromCamera(this.mouse, this.camera);
+
+			const handleIntersects = this.raycaster.intersectObjects(this.handlesGroup.children, true);
+			if (handleIntersects.length > 0) {
+				let hitHandle = handleIntersects[0].object;
+				while (hitHandle.parent && !hitHandle.userData.isHandle) {
+					hitHandle = hitHandle.parent;
+				}
+				if (hitHandle.userData.isHandle) {
+					const dir = hitHandle.userData.direction;
+					this.draggingHandle = dir;
+					window.dispatchEvent(new CustomEvent('handle-drag-start'));
+					audio.playClick();
+				}
+			}
 		};
 
 		const onPointerUp = (e) => {
+			if (this.draggingHandle) {
+				this.draggingHandle = null;
+				window.dispatchEvent(new CustomEvent('handle-drag-end'));
+				window.dispatchEvent(new CustomEvent('diorama-changed'));
+				isMouseDown = false;
+				return;
+			}
+
 			if (!isMouseDown) return;
 			isMouseDown = false;
 
 			// If mouse dragged (rotated camera), don't click/place
 			const dist = Math.sqrt(Math.pow(e.clientX - startX, 2) + Math.pow(e.clientY - startY, 2));
 			if (dist > 5) return;
+
+			// Raycast handles first (for standard click fallback)
+			const rect = this.domElement.getBoundingClientRect();
+			this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+			this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+			this.raycaster.setFromCamera(this.mouse, this.camera);
+			
+			const handleIntersects = this.raycaster.intersectObjects(this.handlesGroup.children, true);
+			if (handleIntersects.length > 0) {
+				let hitHandle = handleIntersects[0].object;
+				while (hitHandle.parent && !hitHandle.userData.isHandle) {
+					hitHandle = hitHandle.parent;
+				}
+				if (hitHandle.userData.isHandle) {
+					const dir = hitHandle.userData.direction;
+					window.dispatchEvent(new CustomEvent('handle-resize-clicked', { detail: dir }));
+					return; // Intercepted, do not place or select block!
+				}
+			}
 
 			const mousePos = this.getMouseWorldPosition(e);
 
@@ -545,6 +866,36 @@ export class DioramaBuilder {
 
 		// Track mouse move for placement preview
 		const onPointerMove = (e) => {
+			if (this.draggingHandle) {
+				// Drag to resize logic
+				const rect = this.domElement.getBoundingClientRect();
+				this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+				this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+				this.raycaster.setFromCamera(this.mouse, this.camera);
+
+				const intersectionPoint = new THREE.Vector3();
+				this.raycaster.ray.intersectPlane(this.floorPlane, intersectionPoint);
+
+				const dir = this.draggingHandle;
+				let minX = this.gridMinX;
+				let maxX = this.gridMaxX;
+				let minZ = this.gridMinZ;
+				let maxZ = this.gridMaxZ;
+
+				if (dir === 'east') {
+					maxX = Math.max(minX + 4, Math.min(minX + 24, Math.round(intersectionPoint.x / 2) * 2));
+				} else if (dir === 'west') {
+					minX = Math.min(maxX - 4, Math.max(maxX - 24, Math.round(intersectionPoint.x / 2) * 2));
+				} else if (dir === 'north') {
+					minZ = Math.min(maxZ - 4, Math.max(maxZ - 24, Math.round(intersectionPoint.z / 2) * 2));
+				} else if (dir === 'south') {
+					maxZ = Math.max(minZ + 4, Math.min(minZ + 24, Math.round(intersectionPoint.z / 2) * 2));
+				}
+
+				window.dispatchEvent(new CustomEvent('baseplate-resized-drag', { detail: { minX, maxX, minZ, maxZ } }));
+				return;
+			}
+
 			if (!this.activeItem) return;
 			
 			const mousePos = this.getMouseWorldPosition(e);
@@ -570,6 +921,34 @@ export class DioramaBuilder {
 			} else if (key === 'm') {
 				// M to pick up/move the selected block
 				this.pickUpSelected();
+			} else if (key === 'arrowup') {
+				if (this.selectedMesh) {
+					e.preventDefault();
+					if (e.shiftKey) {
+						this.nudgeSelectedPosZ(-0.1);
+					} else {
+						this.nudgeSelectedHeight(0.1);
+					}
+				}
+			} else if (key === 'arrowdown') {
+				if (this.selectedMesh) {
+					e.preventDefault();
+					if (e.shiftKey) {
+						this.nudgeSelectedPosZ(0.1);
+					} else {
+						this.nudgeSelectedHeight(-0.1);
+					}
+				}
+			} else if (key === 'arrowleft') {
+				if (this.selectedMesh) {
+					e.preventDefault();
+					this.nudgeSelectedPosX(-0.1);
+				}
+			} else if (key === 'arrowright') {
+				if (this.selectedMesh) {
+					e.preventDefault();
+					this.nudgeSelectedPosX(0.1);
+				}
 			} else if (key === 'delete' || key === 'backspace') {
 				this.deleteSelected();
 			} else if (key === 'escape') {

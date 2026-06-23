@@ -274,12 +274,12 @@ function buildWallPlain(color, matType) {
 	const tex = getWallpaperTexture(baseTexColor, color); // Color determines stripes
 	
 	// Wall body
-	const geo = getBoxGeometry(4, 3, 0.15);
+	const geo = getBoxGeometry(4, 2.9, 0.15);
 	const mat = createMaterial('fabric', color, tex);
 	const mesh = new THREE.Mesh(geo, mat);
 	mesh.castShadow = true;
 	mesh.receiveShadow = true;
-	mesh.position.y = 1.5;
+	mesh.position.y = 1.45;
 	group.add(mesh);
 	
 	// Baseboard wood trim at bottom

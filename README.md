@@ -1,4 +1,4 @@
-# Miniature Studio - Cozy 3D Room Builder diorama 🌿
+ # Miniature Studio - Cozy 3D Room Builder diorama 🌿
 
 An interactive, web-based 3D diorama designer for building cozy miniature rooms and environments using a catalog of stylized, procedurally modeled digital blocks.
 
@@ -11,6 +11,10 @@ Try designing your own diorama by running a local server and opening `index.html
   - Press **`R`** to rotate clockwise.
   - Press **`Q`** (or **`Shift + R`**) to rotate counter-clockwise.
   - Or use the **Rotation Angle** slider in the properties panel to adjust orientation dynamically.
+* **↕️ Manual Height Adjustment (`▲` / `▼`)**: Raise or lower the height (Y-axis) of selected blocks:
+  - Press **`▲` (Up Arrow)** to raise the block by `0.1` units.
+  - Press **`▼` (Down Arrow)** to lower the block by `0.1` units.
+  - Or use the **Height Position (Y)** slider in the properties panel to dial in exact vertical heights (e.g. raise paintings on walls or place objects on tables).
 * **Procedural 3D Assets**: Handcrafted models constructed entirely from Three.js primitives (walls with gardens, flooring, tea counters, bookcases, tables, lighting, and a herald trumpet *White Rabbit* figure).
 * **Dynamic Texture Generators**: Materials (wood planks, checkered tiles, Roman numeral clock face, wallpapers) drawn programmatically onto 2D canvas layers.
 * **Web Audio Synthesizer**: Organic retro sound effects (placement clops, glass clinks, sweep deletions, and arpeggios) synthesized natively.

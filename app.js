@@ -85,7 +85,7 @@ function init() {
 	scene.add(deskMesh);
 
 	// Grid Helper for base boundary (8x8 grid)
-	gridHelper = new THREE.GridHelper(8, 16, '#67a390', '#253d36');
+	gridHelper = createRectangularGrid(8, 8);
 	gridHelper.position.y = 0.001; // Slightly above desk
 	scene.add(gridHelper);
 
@@ -223,9 +223,38 @@ function onSelectionChanged(userData) {
 	document.getElementById('prop-color-hex').textContent = userData.color.toUpperCase();
 
 	// Set rotation slider
-	const deg = Math.round((userData.rotation * 180) / Math.PI) % 360;
+	const deg = builder.selectedMesh ? Math.round((builder.selectedMesh.rotation.y * 180) / Math.PI) % 360 : 0;
 	document.getElementById('prop-rotation').value = deg;
 	document.getElementById('prop-rotation-label').textContent = `${deg}°`;
+
+	// Set height slider
+	const heightY = builder.selectedMesh ? builder.selectedMesh.position.y : 0.0;
+	document.getElementById('prop-height').value = heightY;
+	document.getElementById('prop-height-label').textContent = `${heightY.toFixed(2)}m`;
+
+	// Set X slider bounds and value
+	const posXInput = document.getElementById('prop-pos-x');
+	if (posXInput) {
+		const minX = builder.gridMinX;
+		const maxX = builder.gridMaxX;
+		posXInput.min = minX;
+		posXInput.max = maxX;
+		const posX = builder.selectedMesh ? builder.selectedMesh.position.x : 0.0;
+		posXInput.value = posX;
+		document.getElementById('prop-pos-x-label').textContent = `${posX.toFixed(2)}m`;
+	}
+
+	// Set Z slider bounds and value
+	const posZInput = document.getElementById('prop-pos-z');
+	if (posZInput) {
+		const minZ = builder.gridMinZ;
+		const maxZ = builder.gridMaxZ;
+		posZInput.min = minZ;
+		posZInput.max = maxZ;
+		const posZ = builder.selectedMesh ? builder.selectedMesh.position.z : 0.0;
+		posZInput.value = posZ;
+		document.getElementById('prop-pos-z-label').textContent = `${posZ.toFixed(2)}m`;
+	}
 
 	// Select mat type
 	const matSelect = document.getElementById('prop-material');
@@ -339,6 +368,62 @@ function setupUIEvents() {
 		audio.playClick();
 	});
 
+	// Base width/depth slider changes
+	const widthInput = document.getElementById('base-width-input');
+	const depthInput = document.getElementById('base-depth-input');
+
+	const handleSliderInput = () => {
+		const w = parseInt(widthInput.value, 10);
+		const d = parseInt(depthInput.value, 10);
+		const halfW = w / 2;
+		const halfD = d / 2;
+		updateBaseplateSize(-halfW, halfW, -halfD, halfD, false);
+		window.dispatchEvent(new CustomEvent('diorama-changed'));
+	};
+
+	if (widthInput && depthInput) {
+		widthInput.addEventListener('input', handleSliderInput);
+		depthInput.addEventListener('input', handleSliderInput);
+
+		widthInput.addEventListener('change', () => audio.playChime());
+		depthInput.addEventListener('change', () => audio.playChime());
+	}
+
+	// Handle Drag-to-Resize Listeners
+	window.addEventListener('handle-drag-start', () => {
+		if (controls) controls.enabled = false;
+	});
+
+	window.addEventListener('handle-drag-end', () => {
+		if (controls) controls.enabled = true;
+	});
+
+	window.addEventListener('baseplate-resized-drag', (e) => {
+		const { minX, maxX, minZ, maxZ } = e.detail;
+		updateBaseplateSize(minX, maxX, minZ, maxZ, false);
+	});
+
+	window.addEventListener('handle-resize-clicked', (e) => {
+		const dir = e.detail;
+		let minX = builder.gridMinX;
+		let maxX = builder.gridMaxX;
+		let minZ = builder.gridMinZ;
+		let maxZ = builder.gridMaxZ;
+		
+		if (dir === 'east') {
+			maxX = Math.min(minX + 24, maxX + 2);
+		} else if (dir === 'west') {
+			minX = Math.max(maxX - 24, minX - 2);
+		} else if (dir === 'north') {
+			minZ = Math.max(maxZ - 24, minZ - 2);
+		} else if (dir === 'south') {
+			maxZ = Math.min(minZ + 24, maxZ + 2);
+		}
+		
+		updateBaseplateSize(minX, maxX, minZ, maxZ, true);
+		window.dispatchEvent(new CustomEvent('diorama-changed'));
+	});
+
 	// Template select changes
 	document.getElementById('template-select').addEventListener('change', (e) => {
 		loadTemplate(e.target.value);
@@ -385,6 +470,34 @@ function setupUIEvents() {
 		builder.setSelectedRotation((val * Math.PI) / 180);
 	});
 
+	// Height Slider change
+	const propHeight = document.getElementById('prop-height');
+	propHeight.addEventListener('input', (e) => {
+		const val = parseFloat(e.target.value);
+		document.getElementById('prop-height-label').textContent = `${val.toFixed(2)}m`;
+		builder.setSelectedHeight(val);
+	});
+
+	// X Position Slider change
+	const propPosX = document.getElementById('prop-pos-x');
+	if (propPosX) {
+		propPosX.addEventListener('input', (e) => {
+			const val = parseFloat(e.target.value);
+			document.getElementById('prop-pos-x-label').textContent = `${val.toFixed(2)}m`;
+			builder.setSelectedPosX(val);
+		});
+	}
+
+	// Z Position Slider change
+	const propPosZ = document.getElementById('prop-pos-z');
+	if (propPosZ) {
+		propPosZ.addEventListener('input', (e) => {
+			const val = parseFloat(e.target.value);
+			document.getElementById('prop-pos-z-label').textContent = `${val.toFixed(2)}m`;
+			builder.setSelectedPosZ(val);
+		});
+	}
+
 	document.getElementById('prop-material').addEventListener('change', (e) => {
 		builder.updateSelectedMatType(e.target.value);
 	});
@@ -414,7 +527,8 @@ function setupUIEvents() {
 	btnSnapshot.addEventListener('click', () => {
 		// Hide outline helpers temporarily
 		builder.boxHelper.visible = false;
-		gridHelper.visible = false;
+		if (gridHelper) gridHelper.visible = false;
+		if (builder.handlesGroup) builder.handlesGroup.visible = false;
 		
 		// Hide active placement preview
 		builder.previewGroup.visible = false;
@@ -427,8 +541,9 @@ function setupUIEvents() {
 
 		// Restore original state
 		if (builder.selectedMesh) builder.boxHelper.visible = true;
-		if (builder.gridEnabled) gridHelper.visible = true;
+		if (builder.gridEnabled && gridHelper) gridHelper.visible = true;
 		if (builder.activeItem) builder.previewGroup.visible = true;
+		if (builder.handlesGroup) builder.handlesGroup.visible = true;
 
 		// Pop photo modal
 		document.getElementById('snapshot-preview').src = dataUrl;
@@ -460,9 +575,110 @@ function setupUIEvents() {
 
 	// Auto-save diorama state on change
 	window.addEventListener('diorama-changed', () => {
+		if (builder) builder.adjustWallCorners();
 		const json = builder.serializeScene();
 		localStorage.setItem('diorama_autosave', json);
 	});
+}
+
+function updateBaseplateSize(minX, maxX, minZ, maxZ, playAudio = false) {
+	const width = maxX - minX;
+	const depth = maxZ - minZ;
+
+	const centerX = (minX + maxX) / 2;
+	const centerZ = (minZ + maxZ) / 2;
+
+	// 1. Recreate Grid Helper
+	if (gridHelper) scene.remove(gridHelper);
+	gridHelper = createRectangularGrid(width, depth);
+	gridHelper.position.set(centerX, 0.001, centerZ);
+	scene.add(gridHelper);
+
+	// 2. Recreate Desk Mesh
+	if (deskMesh) scene.remove(deskMesh);
+	const deskGeo = new THREE.BoxGeometry(width + 2, 0.5, depth + 2);
+	const deskMat = new THREE.MeshStandardMaterial({
+		color: new THREE.Color(isDayMode ? lightingConfig.day.deskColor : lightingConfig.night.deskColor),
+		roughness: 0.6,
+		metalness: 0.1
+	});
+	deskMesh = new THREE.Mesh(deskGeo, deskMat);
+	deskMesh.position.set(centerX, -0.25, centerZ);
+	deskMesh.receiveShadow = true;
+	scene.add(deskMesh);
+
+	// 3. Update Builder limits
+	builder.setGridLimits(minX, maxX, minZ, maxZ);
+	
+	// 4. Sync range input values & labels
+	const widthInput = document.getElementById('base-width-input');
+	const depthInput = document.getElementById('base-depth-input');
+	const widthLabel = document.getElementById('base-width-label');
+	const depthLabel = document.getElementById('base-depth-label');
+
+	if (widthInput && parseInt(widthInput.value, 10) !== width) {
+		widthInput.value = width;
+	}
+	if (depthInput && parseInt(depthInput.value, 10) !== depth) {
+		depthInput.value = depth;
+	}
+	if (widthLabel) widthLabel.textContent = width;
+	if (depthLabel) depthLabel.textContent = depth;
+
+	// Update grid checkbox active state visual
+	document.getElementById('btn-grid').classList.add('active');
+	builder.gridEnabled = true;
+	gridHelper.visible = true;
+
+	if (playAudio) {
+		audio.playChime();
+	}
+}
+
+// Listen for base size loads from saves
+window.addEventListener('baseplate-size-loaded', (e) => {
+	const { minX, maxX, minZ, maxZ } = e.detail;
+	updateBaseplateSize(minX, maxX, minZ, maxZ, false);
+});
+
+// Custom Rectangular Grid Helper
+function createRectangularGrid(width, depth, step = 0.5) {
+	const normalMaterial = new THREE.LineBasicMaterial({ color: '#253d36', transparent: true, opacity: 0.5 });
+	const highlightMaterial = new THREE.LineBasicMaterial({ color: '#67a390', transparent: true, opacity: 0.8 });
+	
+	const group = new THREE.Group();
+	const normalVertices = [];
+	const highlightVertices = [];
+	
+	const halfW = width / 2;
+	const halfD = depth / 2;
+	
+	// Lines along X axis (moving along Z)
+	for (let z = -halfD; z <= halfD; z = Math.round((z + step) * 100) / 100) {
+		const isCenter = Math.abs(z) < 0.01;
+		const vertices = isCenter ? highlightVertices : normalVertices;
+		vertices.push(-halfW, 0, z, halfW, 0, z);
+	}
+	
+	// Lines along Z axis (moving along X)
+	for (let x = -halfW; x <= halfW; x = Math.round((x + step) * 100) / 100) {
+		const isCenter = Math.abs(x) < 0.01;
+		const vertices = isCenter ? highlightVertices : normalVertices;
+		vertices.push(x, 0, -halfD, x, 0, halfD);
+	}
+	
+	if (normalVertices.length > 0) {
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute('position', new THREE.Float32BufferAttribute(normalVertices, 3));
+		group.add(new THREE.LineSegments(geo, normalMaterial));
+	}
+	if (highlightVertices.length > 0) {
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute('position', new THREE.Float32BufferAttribute(highlightVertices, 3));
+		group.add(new THREE.LineSegments(geo, highlightMaterial));
+	}
+	
+	return group;
 }
 
 // Window resizing
