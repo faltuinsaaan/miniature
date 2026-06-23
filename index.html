@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Design and build your own cozy 3D miniature houses and dioramas procedurally with a premium glassmorphic designer.">
+	<title>Miniature Studio - Cozy 3D Room Builder</title>
+	<!-- Fonts -->
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,500&display=swap" rel="stylesheet">
+	<!-- Styles -->
+	<link rel="stylesheet" href="index.css">
+	<script type="importmap">
+		{
+			"imports": {
+				"three": "https://unpkg.com/three@0.184.0/build/three.module.js",
+				"three/addons/": "https://unpkg.com/three@0.184.0/examples/jsm/"
+			}
+		}
+	</script>
+</head>
+<body class="dark-theme">
+	<div id="app">
+		<!-- Header -->
+		<header class="app-header">
+			<div class="logo">
+				<span class="logo-icon">🌿</span>
+				<h1>Miniature Studio</h1>
+				<span class="logo-tag">MVP</span>
+			</div>
+			
+			<div class="controls-row">
+				<!-- Template Selector -->
+				<div class="control-group">
+					<label for="template-select">Theme Template:</label>
+					<select id="template-select" class="styled-select">
+						<option value="empty">Empty Desk & Grid</option>
+						<option value="alice" selected>Alice's Tea Corner (Preset)</option>
+						<option value="reading">Cozy Reading Nook (Preset)</option>
+					</select>
+				</div>
+
+				<!-- Save/Load/Clear -->
+				<div class="btn-group">
+					<button id="btn-save" class="btn btn-secondary" title="Save scene to browser storage">Save</button>
+					<button id="btn-load" class="btn btn-secondary" title="Load last saved scene">Load</button>
+					<button id="btn-clear" class="btn btn-danger" title="Reset baseplate">Clear</button>
+				</div>
+			</div>
+		</header>
+
+		<!-- Main Workspace -->
+		<main class="workspace-container">
+			<!-- Left Catalog Sidebar -->
+			<aside class="sidebar left-panel" id="catalog-panel">
+				<h2>Asset Library</h2>
+				
+				<!-- Tabs -->
+				<nav class="catalog-tabs" aria-label="Catalog Categories">
+					<button class="tab-btn active" data-category="structure">Structure</button>
+					<button class="tab-btn" data-category="furniture">Furniture</button>
+					<button class="tab-btn" data-category="decor">Decor</button>
+					<button class="tab-btn" data-category="figures">Special</button>
+				</nav>
+
+				<!-- Scrollable Catalog list -->
+				<div class="catalog-content" id="catalog-list">
+					<!-- Dynamically populated from JS -->
+				</div>
+
+				<div class="help-section">
+					<h3>Shortcuts</h3>
+					<ul>
+						<li><kbd>R</kbd> Rotate block (90°)</li>
+						<li><kbd>Delete</kbd> / <kbd>Backspace</kbd> Remove block</li>
+						<li><kbd>Esc</kbd> Deselect item</li>
+						<li><kbd>Drag</kbd> Orbit camera</li>
+						<li><kbd>Shift + Drag</kbd> Pan camera</li>
+					</ul>
+				</div>
+			</aside>
+
+			<!-- 3D Canvas Area -->
+			<section class="canvas-viewport" id="canvas-container">
+				<!-- Canvas goes here -->
+				
+				<!-- Mode Indicators & Floating Controls -->
+				<div class="floating-controls top-center">
+					<div class="tool-indicator" id="current-tool-indicator">
+						<span>Tool: Select / Inspect</span>
+					</div>
+				</div>
+
+				<!-- Floating Bottom Bar for Camera & Lights -->
+				<div class="floating-controls bottom-center">
+					<div class="floating-card settings-bar">
+						<button id="btn-daynight" class="btn-circle btn-toggle" title="Toggle Day / Night Mode">
+							<span class="icon">☀️</span>
+							<span class="label">Day Mode</span>
+						</button>
+						<div class="divider"></div>
+						<button id="btn-grid" class="btn-circle btn-toggle active" title="Toggle Build Grid">
+							<span class="icon">⊞</span>
+							<span class="label">Grid</span>
+						</button>
+						<div class="divider"></div>
+						<button id="btn-camera-iso" class="btn-circle" title="Snap to Isometric View">
+							<span class="icon">📐</span>
+							<span class="label">Iso View</span>
+						</button>
+						<div class="divider"></div>
+						<button id="btn-snapshot" class="btn-circle btn-primary" title="Render cozy studio photo">
+							<span class="icon">📷</span>
+							<span class="label">Snapshot</span>
+						</button>
+					</div>
+				</div>
+			</section>
+
+			<!-- Right Properties Sidebar -->
+			<aside class="sidebar right-panel" id="properties-panel" hidden>
+				<h2>Properties</h2>
+				<div id="no-selection-message" class="empty-state">
+					<p>Click on any placed object in the scene to inspect and customize its details.</p>
+				</div>
+				
+				<div id="selection-details" class="properties-content">
+					<h3 id="prop-title">Oak Dining Table</h3>
+					<span id="prop-category" class="badge">Furniture</span>
+					
+					<div class="property-group">
+						<label for="prop-color">Primary Color:</label>
+						<div class="color-picker-wrapper">
+							<input type="color" id="prop-color" value="#8B5A2B">
+							<span id="prop-color-hex" class="hex-label">#8B5A2B</span>
+						</div>
+					</div>
+
+					<div class="property-group" id="prop-material-group">
+						<label for="prop-material">Material Finish:</label>
+						<select id="prop-material" class="styled-select">
+							<option value="matte">Matte Plastic/Clay</option>
+							<option value="wood">Polished Wood</option>
+							<option value="fabric">Woven Fabric</option>
+							<option value="metallic">Brass / Gold Metal</option>
+							<option value="glowing">Warm LED Emissive</option>
+						</select>
+					</div>
+
+					<div class="property-group flex-row">
+						<button id="btn-prop-rotate" class="btn btn-secondary flex-1">🔄 Rotate (R)</button>
+						<button id="btn-prop-delete" class="btn btn-danger flex-1">🗑️ Delete (Del)</button>
+					</div>
+				</div>
+			</aside>
+		</main>
+
+		<!-- Welcome/Onboarding Dialog -->
+		<dialog id="welcome-dialog" class="glass-dialog">
+			<form method="dialog">
+				<header class="dialog-header">
+					<h2>Welcome to Miniature Studio 🌸</h2>
+				</header>
+				<article class="dialog-body">
+					<p>Craft your dream cozy room diorama in this 3D designer! Inspired by wooden craft kits like the <em>Alice Tea Store</em>, this playground lets you place miniature furniture, lights, and decor.</p>
+					
+					<div class="onboarding-steps">
+						<div class="step">
+							<span class="step-num">1</span>
+							<p><strong>Choose a Block</strong>: Select any item from the left library. Hover over the wooden table to see a preview.</p>
+						</div>
+						<div class="step">
+							<span class="step-num">2</span>
+							<p><strong>Place & Stack</strong>: Click to place a block. You can stack objects on top of tables, bookshelves, or floors.</p>
+						</div>
+						<div class="step">
+							<span class="step-num">3</span>
+							<p><strong>Rotate & Adjust</strong>: Press <kbd>R</kbd> before or after placing to rotate. Click on placed items to customize their colors and textures.</p>
+						</div>
+						<div class="step">
+							<span class="step-num">4</span>
+							<p><strong>Cozy Lighting</strong>: Place glowing lamps and toggle **Night Mode** (☀️/🌙 button) to turn on the warm LED light glow.</p>
+						</div>
+					</div>
+				</article>
+				<footer class="dialog-footer">
+					<button class="btn btn-primary" type="submit">Start Crafting</button>
+				</footer>
+			</form>
+		</dialog>
+
+		<!-- Snapshot View Dialog -->
+		<dialog id="snapshot-dialog" class="glass-dialog snapshot-modal">
+			<div class="snapshot-container">
+				<header class="dialog-header">
+					<h2>Your Miniature Diorama 📸</h2>
+					<button class="close-dialog-btn" id="btn-close-snapshot" aria-label="Close dialog">×</button>
+				</header>
+				<div class="snapshot-frame">
+					<img id="snapshot-preview" src="" alt="Miniature Studio Snapshot">
+					<div class="snapshot-label">
+						<span class="title">My Cozy Miniature</span>
+						<span class="date" id="snapshot-date">June 2026</span>
+					</div>
+				</div>
+				<footer class="dialog-footer">
+					<button id="btn-download-snapshot" class="btn btn-primary">💾 Save Photo</button>
+					<button id="btn-close-snapshot-foot" class="btn btn-secondary">Close</button>
+				</footer>
+			</div>
+		</dialog>
+	</div>
+
+	<!-- Core Scripts -->
+	<script type="module" src="app.js"></script>
+</body>
+</html>
