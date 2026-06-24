@@ -288,6 +288,7 @@ function buildWallPlain(color, matType) {
 	const bbMesh = new THREE.Mesh(bbGeo, bbMat);
 	bbMesh.castShadow = true;
 	bbMesh.position.set(0, 0.075, 0);
+	bbMesh.name = 'baseboard';
 	group.add(bbMesh);
 
 	// Crown moulding wood trim at top
@@ -295,6 +296,7 @@ function buildWallPlain(color, matType) {
 	const cmMesh = new THREE.Mesh(cmGeo, bbMat);
 	cmMesh.castShadow = true;
 	cmMesh.position.set(0, 2.95, 0);
+	cmMesh.name = 'crown_moulding';
 	group.add(cmMesh);
 
 	return group;
@@ -376,6 +378,23 @@ function buildWallWindow(color, matType) {
 		rose.position.set(i + (Math.random() - 0.5) * 0.05, 1.15, 0.25 + (Math.random() - 0.5) * 0.05);
 		group.add(rose);
 	}
+
+	// Baseboard wood trim at bottom
+	const bbGeo = getBoxGeometry(4.02, 0.15, 0.2);
+	const bbMat = createMaterial('wood', '#5c3a21');
+	const bbMesh = new THREE.Mesh(bbGeo, bbMat);
+	bbMesh.castShadow = true;
+	bbMesh.position.set(0, 0.075, 0);
+	bbMesh.name = 'baseboard';
+	group.add(bbMesh);
+
+	// Crown moulding wood trim at top
+	const cmGeo = getBoxGeometry(4.02, 0.1, 0.22);
+	const cmMesh = new THREE.Mesh(cmGeo, bbMat);
+	cmMesh.castShadow = true;
+	cmMesh.position.set(0, 2.95, 0);
+	cmMesh.name = 'crown_moulding';
+	group.add(cmMesh);
 
 	return group;
 }
@@ -973,6 +992,467 @@ function buildGlowingLamp(color, matType) {
 	return group;
 }
 
+// Opened Vintage Book (Scholar Family)
+function buildOpenedBook(color, matType) {
+	const group = new THREE.Group();
+	const coverMat = createMaterial('wood', color);
+	const pageMat = createMaterial('matte', '#faf5eb');
+	const ribbonMat = createMaterial('fabric', '#b31b1b');
+
+	// Spine cylinder
+	const spine = new THREE.Mesh(getCylinderGeometry(0.04, 0.04, 0.45, 8), coverMat);
+	spine.rotation.x = Math.PI / 2;
+	spine.position.y = 0.03;
+	group.add(spine);
+
+	// Left cover slant
+	const coverL = new THREE.Mesh(getBoxGeometry(0.24, 0.02, 0.45), coverMat);
+	coverL.position.set(-0.13, 0.03, 0);
+	coverL.rotation.z = -0.08;
+	coverL.castShadow = true;
+	coverL.receiveShadow = true;
+	group.add(coverL);
+
+	// Right cover slant
+	const coverR = new THREE.Mesh(getBoxGeometry(0.24, 0.02, 0.45), coverMat);
+	coverR.position.set(0.13, 0.03, 0);
+	coverR.rotation.z = 0.08;
+	coverR.castShadow = true;
+	coverR.receiveShadow = true;
+	group.add(coverR);
+
+	// Left layered pages
+	for (let i = 0; i < 3; i++) {
+		const page = new THREE.Mesh(getBoxGeometry(0.22, 0.015, 0.43), pageMat);
+		page.position.set(-0.12, 0.045 + i * 0.012, 0);
+		page.rotation.z = -0.08 + i * 0.01;
+		page.castShadow = true;
+		group.add(page);
+	}
+
+	// Right layered pages
+	for (let i = 0; i < 3; i++) {
+		const page = new THREE.Mesh(getBoxGeometry(0.22, 0.015, 0.43), pageMat);
+		page.position.set(0.12, 0.045 + i * 0.012, 0);
+		page.rotation.z = 0.08 - i * 0.01;
+		page.castShadow = true;
+		group.add(page);
+	}
+
+	// Book ribbon
+	const ribbon = new THREE.Mesh(getBoxGeometry(0.024, 0.01, 0.46), ribbonMat);
+	ribbon.position.set(0.04, 0.075, 0.01);
+	ribbon.rotation.z = 0.05;
+	group.add(ribbon);
+
+	return group;
+}
+
+// Hanging Ivy Plant (Nature Family)
+function buildHangingIvy(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const potMat = createMaterial('matte', '#d27d2d');
+	const vineMat = createMaterial('fabric', color);
+	const stringMat = createMaterial('matte', '#8e7966');
+
+	// Bracket base
+	const backplate = new THREE.Mesh(getBoxGeometry(0.06, 0.35, 0.04), woodMat);
+	backplate.position.set(0, 0.8, -0.18);
+	backplate.castShadow = true;
+	group.add(backplate);
+
+	// Peg extending forward
+	const peg = new THREE.Mesh(getCylinderGeometry(0.015, 0.015, 0.22, 6), woodMat);
+	peg.rotation.x = Math.PI / 2;
+	peg.position.set(0, 0.9, -0.08);
+	peg.castShadow = true;
+	group.add(peg);
+
+	// Hanging pot
+	const pot = new THREE.Mesh(getCylinderGeometry(0.1, 0.07, 0.14, 8), potMat);
+	pot.position.set(0, 0.65, 0);
+	pot.castShadow = true;
+	group.add(pot);
+
+	// Supporting ropes
+	const ropeL = new THREE.Mesh(getCylinderGeometry(0.004, 0.004, 0.26, 4), stringMat);
+	ropeL.position.set(-0.06, 0.78, 0);
+	ropeL.rotation.z = -0.22;
+	group.add(ropeL);
+
+	const ropeR = new THREE.Mesh(getCylinderGeometry(0.004, 0.004, 0.26, 4), stringMat);
+	ropeR.position.set(0.06, 0.78, 0);
+	ropeR.rotation.z = 0.22;
+	group.add(ropeR);
+
+	// Cascading organic leaf spheres
+	const leavesCount = 14;
+	for (let i = 0; i < leavesCount; i++) {
+		const progress = i / (leavesCount - 1);
+		const y = 0.62 - progress * 0.7;
+		const x = Math.sin(i * 1.5) * 0.08 * (1.0 - progress * 0.5);
+		const z = 0.05 + Math.cos(i * 1.5) * 0.04 + progress * 0.06;
+		const size = 0.07 * (1.1 - progress * 0.6) * (0.8 + Math.random() * 0.4);
+		
+		const leaf = new THREE.Mesh(new THREE.SphereGeometry(size, 8, 8), vineMat);
+		leaf.position.set(x, y, z);
+		leaf.castShadow = true;
+		group.add(leaf);
+	}
+
+	return group;
+}
+
+// Mechanical Grandfather Clock (Mechanical Family)
+function buildGearClock(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', color);
+	const goldMat = createMaterial('metallic', '#d4af37');
+	const faceMat = new THREE.MeshBasicMaterial({ map: getClockTexture() });
+	const glassMat = createMaterial('glass', '#ffffff');
+
+	// Bottom cabinet block
+	const base = new THREE.Mesh(getBoxGeometry(0.7, 0.25, 0.42), woodMat);
+	base.position.y = 0.125;
+	base.castShadow = true;
+	base.receiveShadow = true;
+	group.add(base);
+
+	// Middle column frame
+	const body = new THREE.Mesh(getBoxGeometry(0.58, 1.15, 0.36), woodMat);
+	body.position.y = 0.825;
+	body.castShadow = true;
+	body.receiveShadow = true;
+	group.add(body);
+
+	// Gold Pendulum
+	const penStand = new THREE.Mesh(getCylinderGeometry(0.01, 0.01, 0.65, 4), goldMat);
+	penStand.position.set(0, 0.85, 0.1);
+	group.add(penStand);
+
+	const penBob = new THREE.Mesh(getCylinderGeometry(0.08, 0.08, 0.02, 8), goldMat);
+	penBob.rotation.x = Math.PI / 2;
+	penBob.position.set(0, 0.55, 0.1);
+	penBob.castShadow = true;
+	group.add(penBob);
+
+	// Front door glass
+	const glass = new THREE.Mesh(getBoxGeometry(0.42, 0.9, 0.02), glassMat);
+	glass.position.set(0, 0.85, 0.185);
+	group.add(glass);
+
+	// Hood block
+	const hood = new THREE.Mesh(getBoxGeometry(0.64, 0.55, 0.4), woodMat);
+	hood.position.y = 1.675;
+	hood.castShadow = true;
+	hood.receiveShadow = true;
+	group.add(hood);
+
+	// Top trim crown
+	const crown = new THREE.Mesh(getBoxGeometry(0.68, 0.08, 0.44), woodMat);
+	crown.position.y = 1.95;
+	crown.castShadow = true;
+	group.add(crown);
+
+	const crownSphere = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), goldMat);
+	crownSphere.position.set(0, 2.03, 0.1);
+	crownSphere.castShadow = true;
+	group.add(crownSphere);
+
+	// Clock face disc
+	const dial = new THREE.Mesh(getCylinderGeometry(0.21, 0.21, 0.02, 16), faceMat);
+	dial.rotation.x = Math.PI / 2;
+	dial.position.set(0, 1.675, 0.201);
+	dial.castShadow = true;
+	group.add(dial);
+
+	return group;
+}
+
+// Tailor's Dress Form (Craft Family)
+function buildDressForm(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const metalMat = createMaterial('metallic', '#9e9e9e');
+	const fabricMat = createMaterial('fabric', color);
+
+	// Wooden stand base
+	const base = new THREE.Mesh(getCylinderGeometry(0.18, 0.18, 0.04, 8), woodMat);
+	base.position.y = 0.02;
+	base.castShadow = true;
+	base.receiveShadow = true;
+	group.add(base);
+
+	const feet1 = new THREE.Mesh(getBoxGeometry(0.06, 0.06, 0.35), woodMat);
+	feet1.position.set(0, 0.03, 0);
+	feet1.castShadow = true;
+	group.add(feet1);
+
+	const feet2 = new THREE.Mesh(getBoxGeometry(0.35, 0.06, 0.06), woodMat);
+	feet2.position.set(0, 0.03, 0);
+	feet2.castShadow = true;
+	group.add(feet2);
+
+	// Stand rod
+	const post = new THREE.Mesh(getCylinderGeometry(0.015, 0.015, 0.95, 6), metalMat);
+	post.position.y = 0.5;
+	post.castShadow = true;
+	group.add(post);
+
+	// Torso fabric form (Hips, Waist, Chest)
+	const hips = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), fabricMat);
+	hips.position.y = 0.95;
+	hips.scale.set(1.05, 0.8, 1);
+	hips.castShadow = true;
+	group.add(hips);
+
+	const waist = new THREE.Mesh(getCylinderGeometry(0.11, 0.15, 0.28, 10), fabricMat);
+	waist.position.y = 1.15;
+	waist.castShadow = true;
+	group.add(waist);
+
+	const chest = new THREE.Mesh(new THREE.SphereGeometry(0.165, 12, 12), fabricMat);
+	chest.position.y = 1.34;
+	chest.scale.set(1.15, 0.95, 0.85);
+	chest.castShadow = true;
+	group.add(chest);
+
+	// Neck details
+	const neck = new THREE.Mesh(getCylinderGeometry(0.045, 0.045, 0.1, 8), woodMat);
+	neck.position.y = 1.48;
+	neck.castShadow = true;
+	group.add(neck);
+
+	const neckFinial = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), woodMat);
+	neckFinial.position.set(0, 1.54, 0);
+	neckFinial.castShadow = true;
+	group.add(neckFinial);
+
+	return group;
+}
+
+function buildRoadCobble(color, matType) {
+	const group = new THREE.Group();
+	
+	// Dirt/Grout Base
+	const baseColor = '#4a3d31'; // Earthy dark brown/grey dirt grout
+	const baseMat = createMaterial('matte', baseColor);
+	const baseGeo = getBoxGeometry(4, 0.08, 4);
+	const base = new THREE.Mesh(baseGeo, baseMat);
+	base.position.y = 0.04;
+	base.receiveShadow = true;
+	group.add(base);
+
+	// Let's place cobblestones in a running bond pattern (offset rows)
+	const stoneColor = new THREE.Color(color);
+	
+	let seed = 77;
+	function random() {
+		let x = Math.sin(seed++) * 10000;
+		return x - Math.floor(x);
+	}
+
+	const rows = 8;
+	const cols = 8;
+	const spacingX = 4.0 / cols;
+	const spacingZ = 4.0 / rows;
+
+	const stoneSphereGeo = new THREE.SphereGeometry(0.5, 8, 6);
+
+	for (let r = 0; r < rows; r++) {
+		const rowOffset = (r % 2 === 0) ? spacingX * 0.5 : 0;
+		for (let c = 0; c < cols + 1; c++) {
+			const px = -2.0 + c * spacingX - rowOffset + (random() - 0.5) * 0.08;
+			const pz = -2.0 + r * spacingZ + (random() - 0.5) * 0.08;
+
+			if (px < -1.95 || px > 1.95 || pz < -1.95 || pz > 1.95) continue;
+
+			const radX = spacingX * (0.38 + random() * 0.14);
+			const radZ = spacingZ * (0.38 + random() * 0.14);
+			const radY = 0.06 + random() * 0.04;
+
+			const shade = 0.85 + random() * 0.3;
+			const cColor = stoneColor.clone().multiplyScalar(shade);
+			
+			cColor.r = Math.max(0, Math.min(1, cColor.r + (random() - 0.5) * 0.08));
+			cColor.g = Math.max(0, Math.min(1, cColor.g + (random() - 0.5) * 0.08));
+			cColor.b = Math.max(0, Math.min(1, cColor.b + (random() - 0.5) * 0.08));
+
+			const sMat = createMaterial('matte', '#' + cColor.getHexString());
+			const stone = new THREE.Mesh(stoneSphereGeo, sMat);
+			
+			stone.scale.set(radX * 2.0, radY * 2.0, radZ * 2.0);
+			stone.position.set(px, 0.08, pz);
+			stone.rotation.y = (random() - 0.5) * 0.3;
+			
+			stone.castShadow = true;
+			stone.receiveShadow = true;
+			group.add(stone);
+		}
+	}
+
+	// Add tiny moss/grass patches in the cracks for that premium handcrafted touch!
+	const mossMat = createMaterial('fabric', '#5c8043');
+	const mossGeo = new THREE.SphereGeometry(0.2, 5, 4);
+
+	for (let i = 0; i < 20; i++) {
+		const mx = (random() - 0.5) * 3.6;
+		const mz = (random() - 0.5) * 3.6;
+		
+		const moss = new THREE.Mesh(mossGeo, mossMat);
+		const size = 0.4 + random() * 0.6;
+		moss.scale.set(size, 0.05 + random() * 0.05, size);
+		moss.position.set(mx, 0.08, mz);
+		
+		moss.castShadow = true;
+		group.add(moss);
+	}
+
+	return group;
+}
+
+function buildPathStepping(color, matType) {
+	const group = new THREE.Group();
+	
+	const baseColor = '#3b4f2c'; // Mossy green
+	const baseMat = createMaterial('fabric', baseColor);
+	const baseGeo = getBoxGeometry(1.6, 0.02, 4);
+	const base = new THREE.Mesh(baseGeo, baseMat);
+	base.position.y = 0.01;
+	base.receiveShadow = true;
+	group.add(base);
+
+	const stones = [
+		{ z: -1.6, x: -0.2, r: 0.4 },
+		{ z: -0.9, x: 0.2, r: 0.45 },
+		{ z: -0.1, x: -0.1, r: 0.38 },
+		{ z: 0.7, x: 0.3, r: 0.42 },
+		{ z: 1.5, x: -0.2, r: 0.44 }
+	];
+	
+	let seed = 100;
+	function random() {
+		let x = Math.sin(seed++) * 10000;
+		return x - Math.floor(x);
+	}
+
+	stones.forEach((s, idx) => {
+		const stoneGeo = getCylinderGeometry(s.r, s.r * 0.95, 0.04, 7);
+		
+		const shade = 0.8 + random() * 0.4;
+		const cColor = new THREE.Color(color).clone().multiplyScalar(shade);
+		const cMat = createMaterial('matte', '#' + cColor.getHexString());
+		
+		const stone = new THREE.Mesh(stoneGeo, cMat);
+		stone.position.set(s.x, 0.02 + 0.02, s.z);
+		stone.rotation.y = random() * Math.PI * 2;
+		stone.rotation.x = (random() - 0.5) * 0.05;
+		stone.rotation.z = (random() - 0.5) * 0.05;
+		
+		stone.castShadow = true;
+		stone.receiveShadow = true;
+		group.add(stone);
+	});
+	
+	return group;
+}
+
+function buildBridgeArch(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial(matType, color);
+	const stoneMat = createMaterial('matte', '#4a4a4a');
+	const ropeColor = '#8c704f';
+	const ropeMat = createMaterial('matte', ropeColor);
+
+	const endGeo = getBoxGeometry(1.8, 0.2, 0.5);
+	const end1 = new THREE.Mesh(endGeo, stoneMat);
+	end1.position.set(0, 0.1, -1.8);
+	end1.castShadow = true;
+	end1.receiveShadow = true;
+	group.add(end1);
+
+	const end2 = end1.clone();
+	end2.position.set(0, 0.1, 1.8);
+	group.add(end2);
+
+	const numPlanks = 12;
+	const planksGroup = new THREE.Group();
+	
+	for (let i = 0; i <= numPlanks; i++) {
+		const t = i / numPlanks;
+		const z = -1.8 + t * 3.6;
+		const y = 0.18 + 0.38 * (1.0 - Math.pow((z / 1.8), 2));
+		
+		const plankGeo = getBoxGeometry(1.6, 0.06, 0.26);
+		const plank = new THREE.Mesh(plankGeo, woodMat);
+		plank.position.set(0, y, z);
+		
+		const slope = -0.76 * z / 3.24;
+		plank.rotation.x = Math.atan(slope);
+		
+		plank.castShadow = true;
+		plank.receiveShadow = true;
+		planksGroup.add(plank);
+	}
+	group.add(planksGroup);
+
+	const sideX = 0.76;
+	const postZPositions = [-1.7, -0.6, 0.6, 1.7];
+	const postsGroup = new THREE.Group();
+	
+	const postGeo = getCylinderGeometry(0.04, 0.04, 0.7, 8);
+
+	const leftPosts = [];
+	const rightPosts = [];
+
+	postZPositions.forEach(z => {
+		const y_base = 0.18 + 0.38 * (1.0 - Math.pow((z / 1.8), 2));
+		const y_post = y_base + 0.35;
+
+		const lp = new THREE.Mesh(postGeo, woodMat);
+		lp.position.set(-sideX, y_post, z);
+		lp.castShadow = true;
+		postsGroup.add(lp);
+		leftPosts.push(new THREE.Vector3(-sideX, y_base + 0.58, z));
+
+		const rp = new THREE.Mesh(postGeo, woodMat);
+		rp.position.set(sideX, y_post, z);
+		rp.castShadow = true;
+		postsGroup.add(rp);
+		rightPosts.push(new THREE.Vector3(sideX, y_base + 0.58, z));
+	});
+	group.add(postsGroup);
+
+	for (let i = 0; i < postZPositions.length - 1; i++) {
+		const p1_l = leftPosts[i];
+		const p2_l = leftPosts[i+1];
+		addRailSegment(planksGroup, p1_l, p2_l, ropeMat);
+
+		const p1_r = rightPosts[i];
+		const p2_r = rightPosts[i+1];
+		addRailSegment(planksGroup, p1_r, p2_r, ropeMat);
+	}
+
+	return group;
+}
+
+function addRailSegment(group, p1, p2, material) {
+	const distance = p1.distanceTo(p2);
+	const railGeo = new THREE.CylinderGeometry(0.025, 0.025, distance, 6);
+	const rail = new THREE.Mesh(railGeo, material);
+	
+	const midpoint = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+	rail.position.copy(midpoint);
+	
+	const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
+	const up = new THREE.Vector3(0, 1, 0);
+	rail.quaternion.setFromUnitVectors(up, direction);
+	
+	rail.castShadow = true;
+	group.add(rail);
+}
+
 
 // --- Library Catalog Manifest ---
 
@@ -1022,6 +1502,39 @@ export const catalog = [
 		sound: 'wood',
 		createMesh: buildWallWindow
 	},
+	{
+		id: 'road_cobble',
+		name: 'Cobblestone Road Tile',
+		category: 'structure',
+		icon: '🛣️',
+		width: 4, height: 0.15, depth: 4,
+		materialType: 'matte',
+		defaultColor: '#7a7a7a',
+		sound: 'wood',
+		createMesh: buildRoadCobble
+	},
+	{
+		id: 'path_stepping',
+		name: 'Stepping Stone Pathway',
+		category: 'structure',
+		icon: '👣',
+		width: 1.6, height: 0.05, depth: 4,
+		materialType: 'matte',
+		defaultColor: '#a3a3a3',
+		sound: 'wood',
+		createMesh: buildPathStepping
+	},
+	{
+		id: 'bridge_arch',
+		name: 'Handcrafted Arch Bridge',
+		category: 'structure',
+		icon: '🌉',
+		width: 2.0, height: 1.2, depth: 4.0,
+		materialType: 'wood',
+		defaultColor: '#8a5a36',
+		sound: 'wood',
+		createMesh: buildBridgeArch
+	},
 
 	// 2. Furniture
 	{
@@ -1068,6 +1581,28 @@ export const catalog = [
 		sound: 'wood',
 		createMesh: buildBookshelf
 	},
+	{
+		id: 'gear_clock',
+		name: 'Grandfather Clock',
+		category: 'furniture',
+		icon: '🕰️',
+		width: 0.8, height: 2.2, depth: 0.5,
+		materialType: 'wood',
+		defaultColor: '#7a4f30',
+		sound: 'wood',
+		createMesh: buildGearClock
+	},
+	{
+		id: 'dress_form',
+		name: 'Mannequin Dress Form',
+		category: 'furniture',
+		icon: '🧍',
+		width: 0.6, height: 1.6, depth: 0.6,
+		materialType: 'fabric',
+		defaultColor: '#e0cda9',
+		sound: 'wood',
+		createMesh: buildDressForm
+	},
 
 	// 3. Decor
 	{
@@ -1113,6 +1648,28 @@ export const catalog = [
 		defaultColor: '#cc3366',
 		sound: 'glass',
 		createMesh: buildFlowerVase
+	},
+	{
+		id: 'opened_book',
+		name: 'Opened Vintage Book',
+		category: 'decor',
+		icon: '📖',
+		width: 0.6, height: 0.15, depth: 0.45,
+		materialType: 'wood',
+		defaultColor: '#8a2b2b',
+		sound: 'wood',
+		createMesh: buildOpenedBook
+	},
+	{
+		id: 'hanging_ivy',
+		name: 'Hanging Ivy Plant',
+		category: 'decor',
+		icon: '🌿',
+		width: 0.6, height: 1.2, depth: 0.4,
+		materialType: 'fabric',
+		defaultColor: '#3b6e4c',
+		sound: 'wood',
+		createMesh: buildHangingIvy
 	},
 
 	// 4. Special & Figures

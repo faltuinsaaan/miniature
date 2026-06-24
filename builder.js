@@ -1,7 +1,13 @@
 // 3D Scene Interaction, Raycasting, Grid Snapping, & Block Placing Logic
 import * as THREE from 'three';
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import { catalog, createMaterial } from './library.js';
 import * as audio from './audio.js';
+
+// Extend Three.js with BVH acceleration
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 export class DioramaBuilder {
 	constructor(scene, camera, domElement, onSelectionChanged, onToolChanged) {
@@ -42,6 +48,10 @@ export class DioramaBuilder {
 		// 3D Expand Handles Group
 		this.handlesGroup = new THREE.Group();
 		this.scene.add(this.handlesGroup);
+
+		// Smart Guides Group
+		this.guidesGroup = new THREE.Group();
+		this.scene.add(this.guidesGroup);
 
 		// Invisible plane at y=0 for raycast fallback
 		this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -145,6 +155,7 @@ export class DioramaBuilder {
 	setSelectMode() {
 		this.activeItem = null;
 		this.clearPreview();
+		this.clearGuides();
 		this.onToolChanged('Select / Inspect');
 	}
 
@@ -156,6 +167,15 @@ export class DioramaBuilder {
 			this.previewGroup.remove(obj);
 		}
 		this.previewGroup.visible = false;
+	}
+
+	clearGuides() {
+		if (this.guidesGroup) {
+			while(this.guidesGroup.children.length > 0) {
+				const obj = this.guidesGroup.children[0];
+				this.guidesGroup.remove(obj);
+			}
+		}
 	}
 
 	createPreviewMesh() {
@@ -202,7 +222,12 @@ export class DioramaBuilder {
 		// Find intersections with diorama components
 		const targets = [];
 		this.dioramaGroup.traverse(child => {
-			if (child.isMesh) targets.push(child);
+			if (child.isMesh) {
+				if (child.geometry && !child.geometry.boundsTree) {
+					child.geometry.computeBoundsTree();
+				}
+				targets.push(child);
+			}
 		});
 
 		const intersects = this.raycaster.intersectObjects(targets, true);
@@ -251,7 +276,8 @@ export class DioramaBuilder {
 
 		if (mousePos.object) {
 			const item = mousePos.object.userData.catalogItem;
-			const pos = mousePos.object.position;
+			const pos = mesh => mesh ? mesh.position : mousePos.object.position;
+			const targetPos = mousePos.object.position;
 			const rot = mousePos.object.rotation.y;
 
 			// Calculate rotated width and depth projections for both clicked and placing items
@@ -263,15 +289,15 @@ export class DioramaBuilder {
 
 			if (mousePos.normal.y > 0.7) {
 				// Clicked on a top face -> stack on top
-				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : pos.y + item.height;
+				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : targetPos.y + item.height;
 			} else if (Math.abs(mousePos.normal.x) > 0.7) {
-				// Clicked on side face X -> snap adjacent
-				x = this.snap(pos.x + (mousePos.normal.x > 0 ? w_clicked/2 + w_active/2 : -w_clicked/2 - w_active/2));
-				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : pos.y;
+				// Clicked on side face X -> snap adjacent (no snapping on contact X axis)
+				x = targetPos.x + (mousePos.normal.x > 0 ? w_clicked/2 + w_active/2 : -w_clicked/2 - w_active/2);
+				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : targetPos.y;
 			} else if (Math.abs(mousePos.normal.z) > 0.7) {
-				// Clicked on side face Z -> snap adjacent
-				z = this.snap(pos.z + (mousePos.normal.z > 0 ? d_clicked/2 + d_active/2 : -d_clicked/2 - d_active/2));
-				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : pos.y;
+				// Clicked on side face Z -> snap adjacent (no snapping on contact Z axis)
+				z = targetPos.z + (mousePos.normal.z > 0 ? d_clicked/2 + d_active/2 : -d_clicked/2 - d_active/2);
+				y = (placingItem && placingItem.id.startsWith('wall_')) ? 0.0 : targetPos.y;
 			}
 		}
 
@@ -294,28 +320,120 @@ export class DioramaBuilder {
 		z = Math.max(gridMinZ + halfD, Math.min(gridMaxZ - halfD, z));
 		y = Math.max(0.0, y);
 
-		// Corner snapping adjustment for preview of walls: Z-walls (vertical) butt into perpendicular X-walls (horizontal)
-		if (placingItem && placingItem.id.startsWith('wall_')) {
-			const A_is_X = Math.abs(Math.cos(this.currentRotation)) > 0.7;
-			if (!A_is_X) {
-				this.dioramaGroup.children.forEach(mesh => {
-					const B_item = mesh.userData.catalogItem;
-					if (B_item && B_item.id.startsWith('wall_') && mesh !== mousePos.object) {
-						const B_pos = mesh.position;
-						const B_rot = mesh.rotation.y;
-						const B_is_X = Math.abs(Math.cos(B_rot)) > 0.7;
-						if (B_is_X) {
-							const offset = B_item.id === 'wall_plain' ? 2.11 : 2.075;
-							if (Math.abs((z - 2) - B_pos.z) < 0.25 && Math.abs(x - B_pos.x) <= 2.1) {
-								z = B_pos.z + offset;
-							} else if (Math.abs((z + 2) - B_pos.z) < 0.25 && Math.abs(x - B_pos.x) <= 2.1) {
-								z = B_pos.z - offset;
-							}
-						}
+		// SMART GUIDES ALIGNMENT SNAPPING
+		this.clearGuides();
+		if (this.activeItem) {
+			const alignments = [];
+			const SMART_SNAP_THRESHOLD = 0.15;
+			
+			const activeMinX = x - halfW;
+			const activeMaxX = x + halfW;
+			const activeCenterX = x;
+			
+			const activeMinZ = z - halfD;
+			const activeMaxZ = z + halfD;
+			const activeCenterZ = z;
+
+			let snappedX = x;
+			let snappedZ = z;
+			let hasXSnap = false;
+			let hasZSnap = false;
+
+			this.dioramaGroup.children.forEach(mesh => {
+				const otherItem = mesh.userData.catalogItem;
+				if (!otherItem) return;
+
+				// Skip currently dragging preview/selected object itself if moving
+				if (this.selectedMesh && mesh === this.selectedMesh) return;
+
+				const otherBox = new THREE.Box3().setFromObject(mesh);
+				const otherMinX = otherBox.min.x;
+				const otherMaxX = otherBox.max.x;
+				const otherCenterX = (otherMinX + otherMaxX) / 2;
+
+				const otherMinZ = otherBox.min.z;
+				const otherMaxZ = otherBox.max.z;
+				const otherCenterZ = (otherMinZ + otherMaxZ) / 2;
+
+				// Check X alignments
+				if (!hasXSnap) {
+					if (Math.abs(activeCenterX - otherCenterX) < SMART_SNAP_THRESHOLD) {
+						snappedX = otherCenterX;
+						hasXSnap = true;
+						alignments.push({ axis: 'x', value: otherCenterX });
+					} else if (Math.abs(activeMinX - otherMinX) < SMART_SNAP_THRESHOLD) {
+						snappedX = otherMinX + halfW;
+						hasXSnap = true;
+						alignments.push({ axis: 'x', value: otherMinX });
+					} else if (Math.abs(activeMaxX - otherMaxX) < SMART_SNAP_THRESHOLD) {
+						snappedX = otherMaxX - halfW;
+						hasXSnap = true;
+						alignments.push({ axis: 'x', value: otherMaxX });
+					} else if (Math.abs(activeMinX - otherMaxX) < SMART_SNAP_THRESHOLD) {
+						snappedX = otherMaxX + halfW;
+						hasXSnap = true;
+						alignments.push({ axis: 'x', value: otherMaxX });
+					} else if (Math.abs(activeMaxX - otherMinX) < SMART_SNAP_THRESHOLD) {
+						snappedX = otherMinX - halfW;
+						hasXSnap = true;
+						alignments.push({ axis: 'x', value: otherMinX });
 					}
+				}
+
+				// Check Z alignments
+				if (!hasZSnap) {
+					if (Math.abs(activeCenterZ - otherCenterZ) < SMART_SNAP_THRESHOLD) {
+						snappedZ = otherCenterZ;
+						hasZSnap = true;
+						alignments.push({ axis: 'z', value: otherCenterZ });
+					} else if (Math.abs(activeMinZ - otherMinZ) < SMART_SNAP_THRESHOLD) {
+						snappedZ = otherMinZ + halfD;
+						hasZSnap = true;
+						alignments.push({ axis: 'z', value: otherMinZ });
+					} else if (Math.abs(activeMaxZ - otherMaxZ) < SMART_SNAP_THRESHOLD) {
+						snappedZ = otherMaxZ - halfD;
+						hasZSnap = true;
+						alignments.push({ axis: 'z', value: otherMaxZ });
+					} else if (Math.abs(activeMinZ - otherMaxZ) < SMART_SNAP_THRESHOLD) {
+						snappedZ = otherMaxZ + halfD;
+						hasZSnap = true;
+						alignments.push({ axis: 'z', value: otherMaxZ });
+					} else if (Math.abs(activeMaxZ - otherMinZ) < SMART_SNAP_THRESHOLD) {
+						snappedZ = otherMinZ - halfD;
+						hasZSnap = true;
+						alignments.push({ axis: 'z', value: otherMinZ });
+					}
+				}
+			});
+
+			if (hasXSnap) x = snappedX;
+			if (hasZSnap) z = snappedZ;
+
+			// Draw the neon dashed guides
+			alignments.forEach(align => {
+				const points = [];
+				if (align.axis === 'x') {
+					points.push(new THREE.Vector3(align.value, 0.02, gridMinZ));
+					points.push(new THREE.Vector3(align.value, 0.02, gridMaxZ));
+				} else {
+					points.push(new THREE.Vector3(gridMinX, 0.02, align.value));
+					points.push(new THREE.Vector3(gridMaxX, 0.02, align.value));
+				}
+
+				const geo = new THREE.BufferGeometry().setFromPoints(points);
+				const mat = new THREE.LineDashedMaterial({
+					color: '#ff2d55', // hot neon pink
+					dashSize: 0.15,
+					gapSize: 0.1,
+					linewidth: 1
 				});
-			}
+				const line = new THREE.Line(geo, mat);
+				line.computeLineDistances();
+				this.guidesGroup.add(line);
+			});
 		}
+
+
 
 		return new THREE.Vector3(x, y, z);
 	}
@@ -361,6 +479,7 @@ export class DioramaBuilder {
 		};
 
 		this.dioramaGroup.add(mesh);
+		this.clearGuides();
 
 		// Play sound based on item type
 		if (this.activeItem.sound === 'glass') {
@@ -391,6 +510,7 @@ export class DioramaBuilder {
 	deselectBlock() {
 		this.selectedMesh = null;
 		this.boxHelper.visible = false;
+		this.clearGuides();
 		this.onSelectionChanged(null);
 	}
 
@@ -447,6 +567,7 @@ export class DioramaBuilder {
 			};
 			this.dioramaGroup.add(mesh);
 			this.moveOriginalData = null;
+			this.clearGuides();
 			window.dispatchEvent(new CustomEvent('diorama-changed'));
 		}
 	}
@@ -736,46 +857,107 @@ export class DioramaBuilder {
 			return item && item.id.startsWith('wall_');
 		});
 
-		// Reset all Z walls to their snapped grid positions first to clear old offsets
+		// 1. Reset all walls to their exact snapped grid positions (centers do not shift)
 		walls.forEach(mesh => {
-			const rot = mesh.rotation.y;
-			const isX = Math.abs(Math.cos(rot)) > 0.7;
-			if (!isX) {
-				mesh.position.z = Math.round(mesh.position.z / 0.5) * 0.5;
-			}
+			mesh.position.x = Math.round(mesh.position.x / 0.5) * 0.5;
+			mesh.position.z = Math.round(mesh.position.z / 0.5) * 0.5;
 		});
 
-		// Now apply butt joint offsets: Z-walls butt into perpendicular X-walls
-		walls.forEach(meshA => {
-			const rotA = meshA.rotation.y;
-			const isXA_check = Math.abs(Math.cos(rotA)) > 0.7;
-			if (!isXA_check) {
-				// meshA runs along Z
-				const x = meshA.position.x;
-				const z = meshA.position.z;
-				
-				walls.forEach(meshB => {
-					if (meshB === meshA) return;
-					const rotB = meshB.rotation.y;
-					const isXB = Math.abs(Math.cos(rotB)) > 0.7;
-					if (isXB) {
-						// meshB runs along X
-						const bx = meshB.position.x;
-						const bz = meshB.position.z;
-						const B_item = meshB.userData.catalogItem;
-						const offset = (B_item && B_item.id === 'wall_plain') ? 2.11 : 2.075;
-						
-						// Top end of A meets B
-						if (Math.abs((z - 2) - bz) < 0.25 && Math.abs(x - bx) <= 2.1) {
-							meshA.position.z = bz + offset;
+		// 2. Reset scale and local position of baseboard and crown moulding child meshes
+		walls.forEach(mesh => {
+			mesh.traverse(child => {
+				if (child.name === 'baseboard' || child.name === 'crown_moulding') {
+					child.scale.x = 1.0;
+					child.position.x = 0.0;
+				}
+			});
+		});
+
+		// 3. For each wall, calculate the required adjustments at its endpoints
+		walls.forEach(W => {
+			const rotW = W.rotation.y;
+			const isW_X = Math.abs(Math.cos(rotW)) > 0.7;
+
+			// Direction along the length of the wall (local X in world space)
+			const dirW = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotW);
+
+			// Target local X coordinates for baseboard (bb) and crown moulding (cm)
+			// Defaults match the initial mesh width of 4.02
+			let L_bb_1 = -2.01;
+			let L_bb_2 = 2.01;
+			let L_cm_1 = -2.01;
+			let L_cm_2 = 2.01;
+
+			// Check both ends (End 1 at local X = -2, End 2 at local X = 2)
+			for (let E = 1; E <= 2; E++) {
+				const endSign = (E === 1 ? -1 : 1);
+				const endPos_world = W.position.clone().addScaledVector(dirW, endSign * 2.0);
+
+				// Look for perpendicular walls meeting this end
+				walls.forEach(O => {
+					if (O === W) return;
+
+					const rotO = O.rotation.y;
+					const isO_X = Math.abs(Math.cos(rotO)) > 0.7;
+
+					if (isW_X !== isO_X) {
+						// Perpendicular intersection check
+						let intersects = false;
+						if (isW_X) {
+							// W is X-wall, O is Z-wall
+							if (Math.abs(endPos_world.x - O.position.x) < 0.25 && Math.abs(endPos_world.z - O.position.z) <= 2.1) {
+								intersects = true;
+							}
+						} else {
+							// W is Z-wall, O is X-wall
+							if (Math.abs(endPos_world.z - O.position.z) < 0.25 && Math.abs(endPos_world.x - O.position.x) <= 2.1) {
+								intersects = true;
+							}
 						}
-						// Bottom end of A meets B
-						else if (Math.abs((z + 2) - bz) < 0.25 && Math.abs(x - bx) <= 2.1) {
-							meshA.position.z = bz - offset;
+
+						if (intersects) {
+							if (isW_X) {
+								// X-wall is the outer wall (extends to outer face of Z-wall)
+								if (E === 1) {
+									L_cm_1 = -2.11;
+									L_bb_1 = -2.10;
+								} else {
+									L_cm_2 = 2.11;
+									L_bb_2 = 2.10;
+								}
+							} else {
+								// Z-wall is the inner wall (stops at inner face of X-wall)
+								if (E === 1) {
+									L_cm_1 = -1.89;
+									L_bb_1 = -1.90;
+								} else {
+									L_cm_2 = 1.89;
+									L_bb_2 = 1.90;
+								}
+							}
 						}
 					}
 				});
 			}
+
+			// Apply scaling and positioning to child meshes
+			const W_cm = L_cm_2 - L_cm_1;
+			const X_cm = (L_cm_1 + L_cm_2) / 2;
+			const scale_cm = W_cm / 4.02;
+
+			const W_bb = L_bb_2 - L_bb_1;
+			const X_bb = (L_bb_1 + L_bb_2) / 2;
+			const scale_bb = W_bb / 4.02;
+
+			W.traverse(child => {
+				if (child.name === 'crown_moulding') {
+					child.scale.x = scale_cm;
+					child.position.x = X_cm;
+				} else if (child.name === 'baseboard') {
+					child.scale.x = scale_bb;
+					child.position.x = X_bb;
+				}
+			});
 		});
 	}
 
@@ -961,6 +1143,7 @@ export class DioramaBuilder {
 		this.domElement.addEventListener('pointerdown', onPointerDown);
 		this.domElement.addEventListener('pointerup', onPointerUp);
 		this.domElement.addEventListener('pointermove', onPointerMove);
+		this.domElement.addEventListener('pointerleave', () => this.clearGuides());
 		window.addEventListener('keydown', onKeyDown);
 	}
 }
