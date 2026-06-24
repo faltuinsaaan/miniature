@@ -164,6 +164,56 @@ export function getClockTexture() {
 	});
 }
 
+// Generate scalloped roof tiles texture
+export function getTileTexture(hexColor) {
+	return getCachedTexture(`tile_${hexColor}`, (ctx, w, h) => {
+		ctx.fillStyle = hexColor;
+		ctx.fillRect(0, 0, w, h);
+		
+		ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+		ctx.lineWidth = 3;
+		const cols = 8;
+		const rows = 8;
+		const colW = w / cols;
+		const rowH = h / rows;
+		for (let r = 0; r <= rows; r++) {
+			const y = r * rowH;
+			ctx.beginPath();
+			ctx.moveTo(0, y);
+			ctx.lineTo(w, y);
+			ctx.stroke();
+			
+			ctx.fillStyle = 'rgba(0,0,0,0.05)';
+			for (let c = 0; c < cols; c++) {
+				const x = c * colW + (r % 2) * (colW / 2);
+				ctx.beginPath();
+				ctx.arc(x + colW / 2, y, colW / 2, 0, Math.PI);
+				ctx.stroke();
+				ctx.fill();
+			}
+		}
+	});
+}
+
+// Generate square grid for greenhouse / conservatory window panes
+export function getGlassGridTexture() {
+	return getCachedTexture('glass_grid', (ctx, w, h) => {
+		ctx.fillStyle = '#b3e5fc';
+		ctx.fillRect(0, 0, w, h);
+		
+		ctx.strokeStyle = '#1d6c6e';
+		ctx.lineWidth = 6;
+		ctx.strokeRect(0, 0, w, h);
+		
+		ctx.beginPath();
+		for (let i = 64; i < w; i += 64) {
+			ctx.moveTo(i, 0); ctx.lineTo(i, h);
+			ctx.moveTo(0, i); ctx.lineTo(w, i);
+		}
+		ctx.stroke();
+	});
+}
+
 
 // --- Helper Materials Builder ---
 
@@ -1454,6 +1504,1338 @@ function addRailSegment(group, p1, p2, material) {
 }
 
 
+// ==================== ROOFS ====================
+
+// --- Scholar Roofs ---
+function buildRoofPediment(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21'); // dark wood trim
+	const tileTex = getTileTexture(color);
+	const tileMat = createMaterial(matType, color, tileTex);
+	const stoneMat = createMaterial('matte', '#e6dec9'); // cream stone face
+
+	// Base board
+	const base = new THREE.Mesh(getBoxGeometry(4.2, 0.15, 4.2), woodMat);
+	base.position.y = 0.075;
+	group.add(base);
+
+	// Front & Back Pediment Triangles
+	const triangleShape = new THREE.Shape();
+	triangleShape.moveTo(-2, 0);
+	triangleShape.lineTo(2, 0);
+	triangleShape.lineTo(0, 1.2);
+	triangleShape.closePath();
+	const triangleGeo = new THREE.ShapeGeometry(triangleShape);
+
+	const frontGable = new THREE.Mesh(triangleGeo, stoneMat);
+	frontGable.position.set(0, 0.15, 2.0);
+	group.add(frontGable);
+
+	const backGable = frontGable.clone();
+	backGable.position.z = -2.0;
+	backGable.rotation.y = Math.PI;
+	group.add(backGable);
+
+	// Sloped roofs
+	const leftRoof = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	leftRoof.position.set(-1.0, 0.725, 0);
+	leftRoof.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftRoof);
+
+	const rightRoof = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	rightRoof.position.set(1.0, 0.725, 0);
+	rightRoof.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightRoof);
+
+	// Ridge Cap
+	const ridge = new THREE.Mesh(getBoxGeometry(0.15, 0.15, 4.25), woodMat);
+	ridge.position.set(0, 1.35, 0);
+	ridge.rotation.z = Math.PI / 4;
+	group.add(ridge);
+
+	// Classical circular medallion in front
+	const medallion = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), createMaterial('metallic', '#d4af37'));
+	medallion.position.set(0, 0.5, 2.05);
+	medallion.scale.set(1, 1, 0.25);
+	group.add(medallion);
+
+	return group;
+}
+
+function buildRoofDome(color, matType) {
+	const group = new THREE.Group();
+	const baseMat = createMaterial('wood', '#5c3a21');
+	const domeTex = getTileTexture(color);
+	const domeMat = createMaterial(matType, color, domeTex);
+	const goldMat = createMaterial('metallic', '#e5c158');
+
+	// Octagonal base plate
+	const base = new THREE.Mesh(getCylinderGeometry(2.1, 2.1, 0.2, 8), baseMat);
+	base.position.y = 0.1;
+	group.add(base);
+
+	// Dome Sphere
+	const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+	dome.position.y = 0.2;
+	group.add(dome);
+
+	// Top Lantern
+	const lanternBase = new THREE.Mesh(getCylinderGeometry(0.4, 0.4, 0.15, 8), baseMat);
+	lanternBase.position.y = 2.1;
+	group.add(lanternBase);
+
+	const lanternGlass = new THREE.Mesh(getCylinderGeometry(0.35, 0.35, 0.4, 8), createMaterial('glass', '#e0f7fa'));
+	lanternGlass.position.y = 2.375;
+	group.add(lanternGlass);
+
+	const lanternCap = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.3, 8), domeMat);
+	lanternCap.position.y = 2.65;
+	group.add(lanternCap);
+
+	const finial = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), goldMat);
+	finial.position.y = 2.85;
+	group.add(finial);
+
+	// Dormer windows
+	const dormerAngles = [0, Math.PI]; // front and back
+	dormerAngles.forEach(angle => {
+		const dormer = new THREE.Group();
+		
+		const body = new THREE.Mesh(getBoxGeometry(0.6, 0.6, 0.6), baseMat);
+		body.position.set(0, 0.3, 0);
+		dormer.add(body);
+
+		const arch = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.6, 8), baseMat);
+		arch.rotation.x = Math.PI / 2;
+		arch.position.set(0, 0.6, 0);
+		dormer.add(arch);
+
+		const glass = new THREE.Mesh(getBoxGeometry(0.4, 0.6, 0.05), createMaterial('glass', '#ffffff'));
+		glass.position.set(0, 0.4, 0.28);
+		dormer.add(glass);
+
+		dormer.position.set(0, 0.8, 1.4).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+		dormer.rotation.y = angle;
+		group.add(dormer);
+	});
+
+	return group;
+}
+
+function buildRoofBook(color, matType) {
+	const group = new THREE.Group();
+	const coverMat = createMaterial('wood', color); // colored cover
+	const pagesMat = createMaterial('matte', '#f5f0e1'); // paper cream color
+	const goldMat = createMaterial('metallic', '#d4af37');
+
+	// Spine at the top ridge
+	const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 4.0, 8), coverMat);
+	spine.position.set(0, 1.25, 0);
+	spine.rotation.x = Math.PI / 2;
+	group.add(spine);
+
+	// Book Pages (Two slopes)
+	const leftPage = new THREE.Mesh(getBoxGeometry(2.1, 0.08, 3.9), pagesMat);
+	leftPage.position.set(-1.0, 0.725, 0);
+	leftPage.rotation.z = Math.atan2(1.1, 2.0);
+	group.add(leftPage);
+
+	const rightPage = new THREE.Mesh(getBoxGeometry(2.1, 0.08, 3.9), pagesMat);
+	rightPage.position.set(1.0, 0.725, 0);
+	rightPage.rotation.z = -Math.atan2(1.1, 2.0);
+	group.add(rightPage);
+
+	// Book Covers (just underneath the pages, slightly wider)
+	const leftCover = new THREE.Mesh(getBoxGeometry(2.15, 0.04, 4.0), coverMat);
+	leftCover.position.set(-1.03, 0.68, 0);
+	leftCover.rotation.z = Math.atan2(1.1, 2.0);
+	group.add(leftCover);
+
+	const rightCover = new THREE.Mesh(getBoxGeometry(2.15, 0.04, 4.0), coverMat);
+	rightCover.position.set(1.03, 0.68, 0);
+	rightCover.rotation.z = -Math.atan2(1.1, 2.0);
+	group.add(rightCover);
+
+	// Decorative bookmark ribbon hanging down front
+	const ribbon = new THREE.Mesh(getBoxGeometry(0.2, 0.02, 1.5), createMaterial('fabric', '#b33939'));
+	ribbon.position.set(0, 0.5, 2.0);
+	ribbon.rotation.x = 0.2;
+	group.add(ribbon);
+
+	// Page edge layers detailing at front/back gable ends
+	const frontPageBlocks = new THREE.Mesh(getBoxGeometry(2.0, 1.0, 0.05), pagesMat);
+	frontPageBlocks.position.set(0, 0.5, 1.9);
+	frontPageBlocks.scale.set(1.8, 1, 1);
+	group.add(frontPageBlocks);
+
+	const backPageBlocks = frontPageBlocks.clone();
+	backPageBlocks.position.z = -1.9;
+	group.add(backPageBlocks);
+
+	return group;
+}
+
+function buildRoofTower(color, matType) {
+	const group = new THREE.Group();
+	const baseMat = createMaterial('wood', '#4a2c11');
+	const coneTex = getTileTexture(color);
+	const coneMat = createMaterial(matType, color, coneTex);
+	const goldMat = createMaterial('metallic', '#d4af37');
+
+	// Base octagonal trim
+	const base = new THREE.Mesh(getCylinderGeometry(2.0, 2.0, 0.2, 8), baseMat);
+	base.position.y = 0.1;
+	group.add(base);
+
+	// Tall pointed octagonal cone roof
+	const cone = new THREE.Mesh(new THREE.ConeGeometry(1.9, 2.4, 8), coneMat);
+	cone.position.y = 1.3;
+	group.add(cone);
+
+	// Tall spire needle
+	const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 6), goldMat);
+	spire.position.y = 2.7;
+	group.add(spire);
+
+	const topBall = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), goldMat);
+	topBall.position.y = 3.0;
+	group.add(topBall);
+
+	// Tiny dormer windows
+	const angles = [-Math.PI / 4, Math.PI / 4];
+	angles.forEach(angle => {
+		const dormer = new THREE.Group();
+		const dBody = new THREE.Mesh(getBoxGeometry(0.5, 0.5, 0.4), baseMat);
+		dBody.position.y = 0.25;
+		dormer.add(dBody);
+
+		const dRoof = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 4), coneMat);
+		dRoof.position.y = 0.65;
+		dRoof.rotation.y = Math.PI / 4;
+		dormer.add(dRoof);
+
+		dormer.position.set(0, 0.5, 1.25).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+		dormer.rotation.y = angle;
+		group.add(dormer);
+	});
+
+	return group;
+}
+
+function buildRoofMansard(color, matType) {
+	const group = new THREE.Group();
+	const trimMat = createMaterial('wood', '#5c3a21');
+	const slateTex = getTileTexture(color);
+	const slateMat = createMaterial(matType, color, slateTex);
+	const goldMat = createMaterial('metallic', '#d4af37');
+
+	// Lower Mansard Truncated Pyramid
+	// 4-segments cylinder, rotated 45deg, creates square pyramid sides
+	const lowerSides = new THREE.Mesh(new THREE.CylinderGeometry(1.3 * Math.sqrt(2), 2.05 * Math.sqrt(2), 0.9, 4), slateMat);
+	lowerSides.position.y = 0.45;
+	lowerSides.rotation.y = Math.PI / 4;
+	group.add(lowerSides);
+
+	// Base plate
+	const base = new THREE.Mesh(getBoxGeometry(4.2, 0.1, 4.2), trimMat);
+	base.position.y = 0.05;
+	group.add(base);
+
+	// Upper Flat Top
+	const topDeck = new THREE.Mesh(getBoxGeometry(2.65, 0.1, 2.65), trimMat);
+	topDeck.position.y = 0.95;
+	group.add(topDeck);
+
+	// Cresting Railing around flat top
+	for (let offset of [-1.25, 1.25]) {
+		const rail1 = new THREE.Mesh(getBoxGeometry(2.5, 0.12, 0.02), goldMat);
+		rail1.position.set(0, 1.05, offset);
+		group.add(rail1);
+
+		const rail2 = new THREE.Mesh(getBoxGeometry(0.02, 0.12, 2.5), goldMat);
+		rail2.position.set(offset, 1.05, 0);
+		group.add(rail2);
+	}
+
+	// Dormer windows on front/left/right sides
+	const dormers = [
+		{ x: 0, z: 1.45, rot: 0 },
+		{ x: -1.45, z: 0, rot: Math.PI / 2 },
+		{ x: 1.45, z: 0, rot: -Math.PI / 2 }
+	];
+	dormers.forEach(d => {
+		const dw = new THREE.Group();
+		const dwBody = new THREE.Mesh(getBoxGeometry(0.55, 0.6, 0.4), trimMat);
+		dwBody.position.y = 0.3;
+		dw.add(dwBody);
+
+		const dwRoof = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.35, 4), slateMat);
+		dwRoof.position.y = 0.75;
+		dwRoof.rotation.y = Math.PI / 4;
+		dw.add(dwRoof);
+
+		const glass = new THREE.Mesh(getBoxGeometry(0.35, 0.4, 0.05), createMaterial('glass', '#ffffff'));
+		glass.position.set(0, 0.3, 0.21);
+		dw.add(glass);
+
+		dw.position.set(d.x, 0.25, d.z);
+		dw.rotation.y = d.rot;
+		group.add(dw);
+	});
+
+	return group;
+}
+
+
+// --- Market Roofs ---
+function buildRoofCurved(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const curveTex = getTileTexture(color);
+	const curveMat = createMaterial(matType, color, curveTex);
+
+	// Curved roof barrel shell
+	const shell = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 4.0, 24, 1, false, 0, Math.PI), curveMat);
+	shell.rotation.z = -Math.PI / 2;
+	shell.rotation.y = Math.PI / 2;
+	shell.position.y = 0.1;
+	group.add(shell);
+
+	// Front & Back flat half-circle gables
+	const gableShape = new THREE.Shape();
+	gableShape.absarc(0, 0, 2.0, 0, Math.PI, false);
+	const gableGeo = new THREE.ShapeGeometry(gableShape);
+
+	const frontGable = new THREE.Mesh(gableGeo, woodMat);
+	frontGable.position.set(0, 0.1, 2.0);
+	group.add(frontGable);
+
+	const backGable = frontGable.clone();
+	backGable.position.z = -2.0;
+	backGable.rotation.y = Math.PI;
+	group.add(backGable);
+
+	// Fascia arches
+	const rimGeo = new THREE.TorusGeometry(2.0, 0.08, 8, 24, Math.PI);
+	const frontRim = new THREE.Mesh(rimGeo, woodMat);
+	frontRim.position.set(0, 0.1, 2.02);
+	group.add(frontRim);
+
+	const backRim = frontRim.clone();
+	backRim.position.z = -2.02;
+	group.add(backRim);
+
+	// Arched dormer windows on the left and right slopes
+	const dormerOffsets = [
+		{ x: -1.3, y: 0.9, rz: 0.6, ry: -Math.PI/2 },
+		{ x: 1.3, y: 0.9, rz: -0.6, ry: Math.PI/2 }
+	];
+	dormerOffsets.forEach(doff => {
+		const dw = new THREE.Group();
+		const dwBody = new THREE.Mesh(getBoxGeometry(0.5, 0.5, 0.5), woodMat);
+		dwBody.position.y = 0.25;
+		dw.add(dwBody);
+
+		const dwCurve = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.5, 8, 1, false, 0, Math.PI), curveMat);
+		dwCurve.rotation.z = -Math.PI / 2;
+		dwCurve.rotation.y = Math.PI / 2;
+		dwCurve.position.y = 0.5;
+		dw.add(dwCurve);
+
+		dw.position.set(doff.x, doff.y, 0);
+		dw.rotation.z = doff.rz;
+		dw.rotation.y = doff.ry;
+		group.add(dw);
+	});
+
+	return group;
+}
+
+function buildRoofAwning(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#8a5a36');
+	const tileTex = getTileTexture(color);
+	const tileMat = createMaterial(matType, color, tileTex);
+
+	// Main Gable roof at back half (z = -2.0 to z = 0.5)
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.3, 0.08, 2.6), tileMat);
+	leftSlope.position.set(-1.05, 0.8, -0.7);
+	leftSlope.rotation.z = 0.55;
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.3, 0.08, 2.6), tileMat);
+	rightSlope.position.set(1.05, 0.8, -0.7);
+	rightSlope.rotation.z = -0.55;
+	group.add(rightSlope);
+
+	// Back gable wall
+	const gableShape = new THREE.Shape();
+	gableShape.moveTo(-2, 0);
+	gableShape.lineTo(2, 0);
+	gableShape.lineTo(0, 1.1);
+	gableShape.closePath();
+	const backG = new THREE.Mesh(new THREE.ShapeGeometry(gableShape), woodMat);
+	backG.position.set(0, 0.1, -2.0);
+	group.add(backG);
+
+	// Awning sloped overhang at front (z = 0.5 to z = 2.1)
+	const awning = new THREE.Mesh(getBoxGeometry(4.2, 0.06, 1.7), tileMat);
+	awning.position.set(0, 0.45, 1.3);
+	awning.rotation.x = 0.35;
+	group.add(awning);
+
+	// Supports columns extending down from front corners
+	const postGeo = getCylinderGeometry(0.04, 0.04, 1.1, 6);
+	const leftPost = new THREE.Mesh(postGeo, woodMat);
+	leftPost.position.set(-1.95, 0.25, 2.0);
+	group.add(leftPost);
+
+	const rightPost = leftPost.clone();
+	rightPost.position.x = 1.95;
+	group.add(rightPost);
+
+	// Scalloped striped fabric valance dangling from front edge
+	for (let x = -1.95; x <= 1.95; x += 0.3) {
+		const valance = new THREE.Mesh(getBoxGeometry(0.28, 0.2, 0.02), createMaterial('fabric', Math.round((x + 1.95)/0.3)%2===0 ? '#e0cda9' : color));
+		valance.position.set(x, 0.1, 2.12);
+		valance.rotation.x = 0.35;
+		group.add(valance);
+	}
+
+	return group;
+}
+
+function buildRoofTerrace(color, matType) {
+	const group = new THREE.Group();
+	const floorColor = '#a16a38';
+	const floorTex = getWoodTexture(floorColor);
+	const woodMat = createMaterial('wood', floorColor, floorTex);
+	const railColor = '#e5c158'; // gold rails
+	const railMat = createMaterial('metallic', railColor);
+
+	// Flat floor platform
+	const platform = new THREE.Mesh(getBoxGeometry(4.0, 0.15, 4.0), woodMat);
+	platform.position.y = 0.075;
+	group.add(platform);
+
+	// 4 corner posts for railing
+	const postGeo = getBoxGeometry(0.12, 0.75, 0.12);
+	const corners = [
+		[-1.9, -1.9],
+		[-1.9, 1.9],
+		[1.9, -1.9],
+		[1.9, 1.9]
+	];
+	corners.forEach(c => {
+		const p = new THREE.Mesh(postGeo, railMat);
+		p.position.set(c[0], 0.45, c[1]);
+		group.add(p);
+	});
+
+	// Horizontal rails
+	for (let offset of [-1.9, 1.9]) {
+		const hRail1 = new THREE.Mesh(getBoxGeometry(3.8, 0.04, 0.04), railMat);
+		hRail1.position.set(0, 0.75, offset);
+		group.add(hRail1);
+
+		const hRail1b = hRail1.clone();
+		hRail1b.position.y = 0.4;
+		group.add(hRail1b);
+
+		const hRail2 = new THREE.Mesh(getBoxGeometry(0.04, 0.04, 3.8), railMat);
+		hRail2.position.set(offset, 0.75, 0);
+		group.add(hRail2);
+
+		const hRail2b = hRail2.clone();
+		hRail2b.position.y = 0.4;
+		group.add(hRail2b);
+	}
+
+	// Stair exit cabin/doghouse in the back-left corner
+	const cabin = new THREE.Group();
+	const cabinBody = new THREE.Mesh(getBoxGeometry(1.2, 0.95, 1.2), createMaterial('wood', '#5c3a21'));
+	cabinBody.position.y = 0.475;
+	cabin.add(cabinBody);
+
+	const cabinRoof = new THREE.Mesh(getBoxGeometry(1.3, 0.06, 1.3), createMaterial('matte', color));
+	cabinRoof.position.y = 0.95;
+	cabinRoof.rotation.z = -0.15; // single slope
+	cabin.add(cabinRoof);
+
+	const cabinDoor = new THREE.Mesh(getBoxGeometry(0.05, 0.75, 0.45), railMat);
+	cabinDoor.position.set(0.61, 0.375, 0);
+	cabin.add(cabinDoor);
+
+	cabin.position.set(-1.1, 0.15, -1.1);
+	group.add(cabin);
+
+	// Little potted flower for decor
+	const pot = new THREE.Mesh(getCylinderGeometry(0.18, 0.12, 0.25, 8), createMaterial('matte', '#8a5a36'));
+	pot.position.set(1.2, 0.25, 1.2);
+	group.add(pot);
+
+	const plant = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), createMaterial('matte', '#2e5c1e'));
+	plant.position.set(1.2, 0.42, 1.2);
+	group.add(plant);
+
+	return group;
+}
+
+function buildRoofWarmChimney(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const tileTex = getTileTexture(color);
+	const tileMat = createMaterial(matType, color, tileTex);
+
+	// Gable base slopes
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.3, 0.08, 4.15), tileMat);
+	leftSlope.position.set(-1.0, 0.725, 0);
+	leftSlope.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.3, 0.08, 4.15), tileMat);
+	rightSlope.position.set(1.0, 0.725, 0);
+	rightSlope.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightSlope);
+
+	// Gable end gables
+	const shape = new THREE.Shape();
+	shape.moveTo(-2, 0);
+	shape.lineTo(2, 0);
+	shape.lineTo(0, 1.2);
+	shape.closePath();
+	const frontG = new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+	frontG.position.set(0, 0.1, 2.0);
+	group.add(frontG);
+
+	const backG = frontG.clone();
+	backG.position.z = -2.0;
+	backG.rotation.y = Math.PI;
+	group.add(backG);
+
+	// Massive Brick Bakery Chimney
+	const chimneyColor = '#8f3b25';
+	const chimneyMat = createMaterial('matte', chimneyColor);
+	const chimneyTopMat = createMaterial('matte', '#4a4a4a');
+	
+	const chimney = new THREE.Mesh(getBoxGeometry(0.7, 1.9, 0.7), chimneyMat);
+	chimney.position.set(1.1, 1.2, 0.6);
+	group.add(chimney);
+
+	const cap = new THREE.Mesh(getBoxGeometry(0.85, 0.1, 0.85), chimneyTopMat);
+	cap.position.set(1.1, 2.15, 0.6);
+	group.add(cap);
+
+	// Stacked warm smoke glowing balls (particle-like)
+	const smokeColors = ['#ffcc00', '#ff9900', '#ff5500'];
+	for (let i = 0; i < 3; i++) {
+		const smoke = new THREE.Mesh(new THREE.SphereGeometry(0.18 - i * 0.03, 8, 8), createMaterial('glowing', smokeColors[i]));
+		smoke.position.set(1.1 + (i*0.06), 2.3 + (i * 0.22), 0.6 - (i*0.04));
+		group.add(smoke);
+	}
+
+	return group;
+}
+
+function buildRoofGable(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const tileTex = getTileTexture(color);
+	const tileMat = createMaterial(matType, color, tileTex);
+
+	// Two sloped panels
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	leftSlope.position.set(-1.0, 0.725, 0);
+	leftSlope.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	rightSlope.position.set(1.0, 0.725, 0);
+	rightSlope.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightSlope);
+
+	// Gable triangular walls
+	const shape = new THREE.Shape();
+	shape.moveTo(-2, 0);
+	shape.lineTo(2, 0);
+	shape.lineTo(0, 1.2);
+	shape.closePath();
+	const frontG = new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+	frontG.position.set(0, 0.1, 2.0);
+	group.add(frontG);
+
+	const backG = frontG.clone();
+	backG.position.z = -2.0;
+	backG.rotation.y = Math.PI;
+	group.add(backG);
+
+	// Facia board borders
+	const faciaL = new THREE.Mesh(getBoxGeometry(2.4, 0.12, 0.05), woodMat);
+	faciaL.position.set(-1.0, 0.725, 2.03);
+	faciaL.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(faciaL);
+
+	const faciaR = new THREE.Mesh(getBoxGeometry(2.4, 0.12, 0.05), woodMat);
+	faciaR.position.set(1.0, 0.725, 2.03);
+	faciaR.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(faciaR);
+
+	return group;
+}
+
+
+// --- Nature Roofs ---
+function buildRoofGreenhouse(color, matType) {
+	const group = new THREE.Group();
+	const metalMat = createMaterial('metallic', color);
+	const glassTex = getGlassGridTexture();
+	const glassMat = createMaterial('glass', '#ffffff', glassTex);
+
+	// Glass curved panels (greenhouse arch)
+	const glassArch = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.0, 3.8, 16, 1, false, 0, Math.PI), glassMat);
+	glassArch.rotation.z = -Math.PI / 2;
+	glassArch.rotation.y = Math.PI / 2;
+	glassArch.position.y = 0.1;
+	group.add(glassArch);
+
+	// Arched metal ribs (structure support)
+	const ribGeo = new THREE.TorusGeometry(2.01, 0.06, 8, 24, Math.PI);
+	for (let zOffset of [-1.9, -0.95, 0.0, 0.95, 1.9]) {
+		const rib = new THREE.Mesh(ribGeo, metalMat);
+		rib.position.set(0, 0.1, zOffset);
+		group.add(rib);
+	}
+
+	// Flat front & back end structures (wood/metal frame with glass)
+	const endShape = new THREE.Shape();
+	endShape.absarc(0, 0, 2.0, 0, Math.PI, false);
+	const frontEnd = new THREE.Mesh(new THREE.ShapeGeometry(endShape), glassMat);
+	frontEnd.position.set(0, 0.1, 1.91);
+	group.add(frontEnd);
+
+	const backEnd = frontEnd.clone();
+	backEnd.position.z = -1.91;
+	group.add(backEnd);
+
+	// Hanging flower basket inside greenhouse
+	const basketPot = new THREE.Mesh(getCylinderGeometry(0.2, 0.15, 0.12, 8), createMaterial('wood', '#8a5a36'));
+	basketPot.position.set(0, 1.1, 0);
+	group.add(basketPot);
+
+	const basketFoliage = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), createMaterial('matte', '#38761d'));
+	basketFoliage.position.set(0, 1.2, 0);
+	group.add(basketFoliage);
+
+	// Hanger chain
+	const chain = new THREE.Mesh(getCylinderGeometry(0.015, 0.015, 0.6, 4), metalMat);
+	chain.position.set(0, 1.6, 0);
+	group.add(chain);
+
+	return group;
+}
+
+function buildRoofConservatory(color, matType) {
+	const group = new THREE.Group();
+	const metalMat = createMaterial('metallic', color);
+	const glassTex = getGlassGridTexture();
+	const glassMat = createMaterial('glass', '#ffffff', glassTex);
+
+	// Octagonal base ring
+	const base = new THREE.Mesh(getCylinderGeometry(2.05, 2.05, 0.15, 8), metalMat);
+	base.position.y = 0.075;
+	group.add(base);
+
+	// Glass dome
+	const glassDome = new THREE.Mesh(new THREE.SphereGeometry(1.95, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2), glassMat);
+	glassDome.position.y = 0.15;
+	group.add(glassDome);
+
+	// Decorative metal ribs tracing seams
+	for (let i = 0; i < 8; i++) {
+		const angle = (i * Math.PI) / 4;
+		const seamGeo = new THREE.TorusGeometry(1.96, 0.035, 6, 16, Math.PI / 2);
+		const seam = new THREE.Mesh(seamGeo, metalMat);
+		seam.position.y = 0.15;
+		seam.rotation.y = angle;
+		seam.rotation.z = -Math.PI / 2;
+		group.add(seam);
+	}
+
+	// Finial crown
+	const crown = new THREE.Mesh(getCylinderGeometry(0.3, 0.35, 0.2, 8), metalMat);
+	crown.position.y = 2.15;
+	group.add(crown);
+
+	const spire = new THREE.Mesh(getCylinderGeometry(0.03, 0.03, 0.4, 6), metalMat);
+	spire.position.y = 2.45;
+	group.add(spire);
+
+	const finialSphere = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), createMaterial('metallic', '#e5c158'));
+	finialSphere.position.y = 2.67;
+	group.add(finialSphere);
+
+	return group;
+}
+
+function buildRoofLiving(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const grassMat = createMaterial('matte', '#4e7a3e');
+	const flowerColors = ['#e84118', '#eccc68', '#70a1ff', '#ff7f50', '#ff4757'];
+
+	// Under-base roof panels
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.15, 4.15), woodMat);
+	leftSlope.position.set(-1.0, 0.725, 0);
+	leftSlope.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.15, 4.15), woodMat);
+	rightSlope.position.set(1.0, 0.725, 0);
+	rightSlope.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightSlope);
+
+	// Large grassy layers on top
+	const leftGrass = new THREE.Mesh(getBoxGeometry(2.38, 0.08, 4.1), grassMat);
+	leftGrass.position.set(-1.0, 0.82, 0);
+	leftGrass.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftGrass);
+
+	const rightGrass = new THREE.Mesh(getBoxGeometry(2.38, 0.08, 4.1), grassMat);
+	rightGrass.position.set(1.0, 0.82, 0);
+	rightGrass.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightGrass);
+
+	// Gable ends
+	const shape = new THREE.Shape();
+	shape.moveTo(-2, 0);
+	shape.lineTo(2, 0);
+	shape.lineTo(0, 1.2);
+	shape.closePath();
+	const frontG = new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+	frontG.position.set(0, 0.1, 2.0);
+	group.add(frontG);
+
+	const backG = frontG.clone();
+	backG.position.z = -2.0;
+	backG.rotation.y = Math.PI;
+	group.add(backG);
+
+	// Wildflower blossoms scattered on grass
+	let seed = 42;
+	function random() {
+		let x = Math.sin(seed++) * 10000;
+		return x - Math.floor(x);
+	}
+	for (let i = 0; i < 22; i++) {
+		const side = (random() > 0.5 ? 1 : -1);
+		const slopeX = side * (0.3 + random() * 1.5);
+		const z = (random() - 0.5) * 3.6;
+		
+		const worldX = slopeX;
+		const worldY = 0.15 + (1.2 * (2.0 - Math.abs(slopeX)) / 2.0) + 0.1;
+		
+		const fColor = flowerColors[Math.floor(random() * flowerColors.length)];
+		const blossom = new THREE.Mesh(new THREE.SphereGeometry(0.07 + random()*0.05, 5, 5), createMaterial('fabric', fColor));
+		blossom.position.set(worldX, worldY, z);
+		group.add(blossom);
+	}
+
+	// Cute circular window in front gable
+	const circleWin = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.1, 12), woodMat);
+	circleWin.rotation.x = Math.PI / 2;
+	circleWin.position.set(0, 0.6, 2.02);
+	group.add(circleWin);
+
+	const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 12), createMaterial('glass', '#a6d8e6'));
+	glass.rotation.x = Math.PI / 2;
+	glass.position.set(0, 0.6, 2.04);
+	group.add(glass);
+
+	return group;
+}
+
+function buildRoofFlowerArch(color, matType) {
+	const group = new THREE.Group();
+	const beamMat = createMaterial('wood', '#5c3a21');
+	const leavesMat = createMaterial('matte', '#2e5c1e');
+	const flowerColors = ['#ff4757', '#ff6b81', '#ffffff', '#eccc68'];
+
+	// 3 thick circular wooden support arches spanning Z
+	const archGeo = new THREE.TorusGeometry(1.9, 0.08, 8, 16, Math.PI);
+	for (let zOffset of [-1.8, 0, 1.8]) {
+		const arch = new THREE.Mesh(archGeo, beamMat);
+		arch.position.set(0, 0.15, zOffset);
+		group.add(arch);
+	}
+
+	// Transverse connection logs
+	const logGeo = getCylinderGeometry(0.04, 0.04, 3.8, 6);
+	for (let angle = 0.25; angle < Math.PI; angle += 0.45) {
+		const log = new THREE.Mesh(logGeo, beamMat);
+		log.position.set(Math.cos(angle) * 1.9, Math.sin(angle) * 1.9 + 0.15, 0);
+		log.rotation.x = Math.PI / 2;
+		group.add(log);
+	}
+
+	// Climbing foliage (overlapping spheres)
+	for (let z = -1.8; z <= 1.8; z += 0.4) {
+		for (let angle = 0.15; angle <= Math.PI - 0.15; angle += 0.25) {
+			if (Math.sin(angle * 5 + z) > -0.2) { // sparse distribution
+				const fx = Math.cos(angle) * (1.9 + (Math.sin(z) * 0.08));
+				const fy = Math.sin(angle) * (1.9 + (Math.sin(z) * 0.08)) + 0.15;
+				
+				const leafCluster = new THREE.Mesh(new THREE.SphereGeometry(0.24, 6, 6), leavesMat);
+				leafCluster.position.set(fx, fy, z + (Math.cos(angle)*0.1));
+				group.add(leafCluster);
+
+				// Sometime drop a flower
+				if (Math.sin(angle * 7 + z * 3) > 0.3) {
+					const fCol = flowerColors[Math.floor((angle + z + 10) * 123) % flowerColors.length];
+					const flower = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), createMaterial('fabric', fCol));
+					flower.position.set(fx + Math.cos(angle)*0.18, fy + Math.sin(angle)*0.18, z);
+					group.add(flower);
+				}
+			}
+		}
+	}
+
+	return group;
+}
+
+function buildRoofLeaf(color, matType) {
+	const group = new THREE.Group();
+	const stemMat = createMaterial('wood', '#4a2c11');
+	const leafMat = createMaterial('matte', color); // leaf green / default color
+
+	// Center ridge branch log
+	const branch = new THREE.Mesh(getCylinderGeometry(0.08, 0.08, 4.25, 8), stemMat);
+	branch.position.set(0, 1.25, 0);
+	branch.rotation.x = Math.PI / 2;
+	group.add(branch);
+
+	// Layered overlapping leaf scales (slanted boxes with tapered scale)
+	const leafCount = 6;
+	for (let side of [-1, 1]) {
+		for (let i = 0; i < leafCount; i++) {
+			const zOffset = -1.8 + i * 0.72;
+			const leaf = new THREE.Group();
+			
+			// Main leaf body plane
+			const leafPlane = new THREE.Mesh(getBoxGeometry(1.9, 0.05, 0.9), leafMat);
+			leafPlane.position.set(0.9, 0, 0);
+			leaf.add(leafPlane);
+
+			// Tapering leaf shape
+			const tip = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.5, 4), leafMat);
+			tip.position.set(1.9, 0, 0);
+			tip.rotation.z = -Math.PI / 2;
+			tip.scale.set(0.1, 1, 1);
+			leaf.add(tip);
+
+			// Position and slant leaf
+			leaf.position.set(0, 1.25, zOffset);
+			leaf.rotation.x = 0.15 * side; // overlapping offset slant
+			leaf.rotation.z = -0.5 * side; // downward slope
+			group.add(leaf);
+		}
+	}
+
+	// Leaf stem finial loop at the top
+	const loop = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.04, 6, 12), stemMat);
+	loop.position.set(0, 1.45, 1.8);
+	group.add(loop);
+
+	return group;
+}
+
+
+// --- Mechanical Roofs ---
+function buildRoofClockTower(color, matType) {
+	const group = new THREE.Group();
+	const brickMat = createMaterial('matte', '#8f5647');
+	const copperColor = '#4e8075';
+	const copperMat = createMaterial('metallic', copperColor);
+	const clockFaceTex = getClockTexture();
+	const clockMat = createMaterial('matte', '#faf6f0', clockFaceTex);
+
+	// Square brick clock cabin
+	const cabin = new THREE.Mesh(getBoxGeometry(2.2, 1.3, 2.2), brickMat);
+	cabin.position.y = 0.65;
+	group.add(cabin);
+
+	// Ornate baseboard cornice
+	const cornice = new THREE.Mesh(getBoxGeometry(2.4, 0.1, 2.4), createMaterial('wood', '#5c3a21'));
+	cornice.position.y = 1.3;
+	group.add(cornice);
+
+	// Clock faces on 4 sides
+	const faceAngles = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+	faceAngles.forEach(angle => {
+		const clockFace = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.05, 12), clockMat);
+		clockFace.rotation.x = Math.PI / 2;
+		clockFace.rotation.y = angle;
+		clockFace.position.set(0, 0.65, 1.1).applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+		group.add(clockFace);
+	});
+
+	// Pointed copper roof on top
+	const copperRoof = new THREE.Mesh(new THREE.ConeGeometry(1.65, 1.6, 4), copperMat);
+	copperRoof.position.y = 2.15;
+	copperRoof.rotation.y = Math.PI / 4; // match square base corners
+	group.add(copperRoof);
+
+	// Spire needle
+	const spire = new THREE.Mesh(getCylinderGeometry(0.03, 0.03, 0.5, 6), copperMat);
+	spire.position.y = 3.1;
+	group.add(spire);
+
+	const ball = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), createMaterial('metallic', '#e5c158'));
+	ball.position.y = 3.35;
+	group.add(ball);
+
+	return group;
+}
+
+function buildRoofCopperDome(color, matType) {
+	const group = new THREE.Group();
+	const copperMat = createMaterial('metallic', color); // defaults to weathered copper #4e8075
+	const trimMat = createMaterial('wood', '#3d2516');
+
+	// Hexagonal/Octagonal trim base
+	const base = new THREE.Mesh(getCylinderGeometry(2.05, 2.05, 0.15, 8), trimMat);
+	base.position.y = 0.075;
+	group.add(base);
+
+	// Main weathered dome half-sphere
+	const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), copperMat);
+	dome.position.y = 0.15;
+	group.add(dome);
+
+	// 8 metal panel seam ribs mapping dome lines
+	for (let i = 0; i < 8; i++) {
+		const angle = (i * Math.PI) / 4;
+		const rib = new THREE.Mesh(new THREE.TorusGeometry(1.91, 0.035, 6, 12, Math.PI / 2), copperMat);
+		rib.position.y = 0.15;
+		rib.rotation.y = angle;
+		rib.rotation.z = -Math.PI / 2;
+		group.add(rib);
+	}
+
+	// Copper needle spire
+	const spire = new THREE.Mesh(getCylinderGeometry(0.035, 0.05, 1.1, 6), copperMat);
+	spire.position.y = 2.5;
+	group.add(spire);
+
+	const indicator = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), createMaterial('metallic', '#e5c158'));
+	indicator.position.y = 3.05;
+	group.add(indicator);
+
+	return group;
+}
+
+function buildRoofGear(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const metalMat = createMaterial('metallic', '#9c9c9c');
+	const brassMat = createMaterial('metallic', '#cfab51');
+	const tileTex = getTileTexture(color);
+	const tileMat = createMaterial(matType, color, tileTex);
+
+	// Gable roof slopes
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	leftSlope.position.set(-1.0, 0.725, 0);
+	leftSlope.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	rightSlope.position.set(1.0, 0.725, 0);
+	rightSlope.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightSlope);
+
+	const shape = new THREE.Shape();
+	shape.moveTo(-2, 0);
+	shape.lineTo(2, 0);
+	shape.lineTo(0, 1.2);
+	shape.closePath();
+	const frontG = new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+	frontG.position.set(0, 0.1, 2.0);
+	group.add(frontG);
+
+	const backG = frontG.clone();
+	backG.position.z = -2.0;
+	backG.rotation.y = Math.PI;
+	group.add(backG);
+
+	// Large exposed mechanical brass gears on front gable wall
+	const gearGroup = new THREE.Group();
+	
+	const mainGear = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.08, 12), brassMat);
+	mainGear.rotation.x = Math.PI / 2;
+	mainGear.position.set(0, 0.65, 2.06);
+	gearGroup.add(mainGear);
+
+	// Small gear interlocking
+	const sideGear = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.08, 8), brassMat);
+	sideGear.rotation.x = Math.PI / 2;
+	sideGear.position.set(-0.6, 0.4, 2.06);
+	gearGroup.add(sideGear);
+
+	// Center bolt
+	const centerBolt = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.15, 6), metalMat);
+	centerBolt.rotation.x = Math.PI / 2;
+	centerBolt.position.copy(mainGear.position).z += 0.02;
+	gearGroup.add(centerBolt);
+
+	group.add(gearGroup);
+
+	// Exhaust bronze pipe stack
+	const pipe = new THREE.Mesh(getCylinderGeometry(0.12, 0.12, 0.9, 8), metalMat);
+	pipe.position.set(-1.0, 1.2, -0.6);
+	pipe.rotation.z = 0.2;
+	group.add(pipe);
+
+	const pipeElbow = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.08, 8, 12, Math.PI / 2), metalMat);
+	pipeElbow.position.set(-1.12, 1.62, -0.6);
+	pipeElbow.rotation.z = -0.2;
+	group.add(pipeElbow);
+
+	return group;
+}
+
+function buildRoofObservatory(color, matType) {
+	const group = new THREE.Group();
+	const baseMat = createMaterial('wood', '#3a4a58');
+	const domeMat = createMaterial('metallic', '#58738a'); // Steel blue color
+	const brassMat = createMaterial('metallic', '#cfa74e');
+
+	// Round base plate
+	const base = new THREE.Mesh(getCylinderGeometry(2.05, 2.05, 0.2, 12), baseMat);
+	base.position.y = 0.1;
+	group.add(base);
+
+	// Dome sphere with telescope viewing slit
+	const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12, 0.15, Math.PI * 2 - 0.3, 0, Math.PI / 2), domeMat);
+	dome.position.y = 0.2;
+	group.add(dome);
+
+	// Telescope barrel pointing out from center slit
+	const scopeGroup = new THREE.Group();
+	
+	const mainScope = new THREE.Mesh(getCylinderGeometry(0.16, 0.22, 1.7, 8), baseMat);
+	mainScope.position.y = 0.75;
+	scopeGroup.add(mainScope);
+
+	const scopeRim = new THREE.Mesh(getCylinderGeometry(0.24, 0.24, 0.1, 8), brassMat);
+	scopeRim.position.y = 1.6;
+	scopeGroup.add(scopeRim);
+
+	const scopeBase = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), brassMat);
+	scopeBase.position.y = 0.0;
+	scopeGroup.add(scopeBase);
+
+	scopeGroup.position.set(0, 0.4, 0);
+	scopeGroup.rotation.x = 0.7; // angle telescope up
+	scopeGroup.rotation.y = 0.25;
+	group.add(scopeGroup);
+
+	// Hatch cover plates on sides of slit
+	const hatchL = new THREE.Mesh(getBoxGeometry(0.04, 1.8, 0.3), domeMat);
+	hatchL.position.set(-0.25, 1.0, 1.3);
+	hatchL.rotation.y = 0.2;
+	hatchL.rotation.z = -0.15;
+	group.add(hatchL);
+
+	const hatchR = hatchL.clone();
+	hatchR.position.x = 0.25;
+	hatchR.rotation.z = 0.15;
+	group.add(hatchR);
+
+	return group;
+}
+
+function buildRoofFactory(color, matType) {
+	const group = new THREE.Group();
+	const brickMat = createMaterial('matte', '#875646'); // side gables
+	const metalMat = createMaterial('metallic', color);
+	const glassTex = getGlassGridTexture();
+	const glassMat = createMaterial('glass', '#ffffff', glassTex);
+
+	// Sawtooth profile (3 repeated teeth spanning Z)
+	for (let i = -1; i <= 1; i++) {
+		const zOffset = i * 1.33;
+		
+		// Slope panels
+		const slope = new THREE.Mesh(getBoxGeometry(4.0, 0.08, 1.1), metalMat);
+		slope.position.set(0, 0.45, zOffset - 0.2);
+		slope.rotation.x = -0.6; // sloped tooth
+		group.add(slope);
+
+		// Vertical glass skylights
+		const skylight = new THREE.Mesh(getBoxGeometry(3.9, 0.65, 0.08), glassMat);
+		skylight.position.set(0, 0.6, zOffset + 0.35);
+		skylight.rotation.x = 0.0; // vertical windows
+		group.add(skylight);
+	}
+
+	// Side brick walls covering the sawtooth profile (left and right flat sides)
+	const leftGable = new THREE.Mesh(getBoxGeometry(0.1, 1.2, 4.0), brickMat);
+	leftGable.position.set(-1.95, 0.6, 0);
+	group.add(leftGable);
+
+	const rightGable = leftGable.clone();
+	rightGable.position.x = 1.95;
+	group.add(rightGable);
+
+	return group;
+}
+
+
+// --- Artisan Roofs ---
+function buildRoofWorkshop(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const tileTex = getTileTexture(color);
+	const tileMat = createMaterial(matType, color, tileTex);
+
+	// Gable roof slopes
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	leftSlope.position.set(-1.0, 0.725, 0);
+	leftSlope.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.08, 4.15), tileMat);
+	rightSlope.position.set(1.0, 0.725, 0);
+	rightSlope.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightSlope);
+
+	const shape = new THREE.Shape();
+	shape.moveTo(-2, 0);
+	shape.lineTo(2, 0);
+	shape.lineTo(0, 1.2);
+	shape.closePath();
+	const frontG = new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+	frontG.position.set(0, 0.1, 2.0);
+	group.add(frontG);
+
+	const backG = frontG.clone();
+	backG.position.z = -2.0;
+	backG.rotation.y = Math.PI;
+	group.add(backG);
+
+	// Brick chimney
+	const chimney = new THREE.Mesh(getBoxGeometry(0.5, 1.4, 0.5), createMaterial('matte', '#8f3b25'));
+	chimney.position.set(1.2, 0.9, -0.9);
+	group.add(chimney);
+	
+	const chimneyCap = new THREE.Mesh(getBoxGeometry(0.6, 0.08, 0.6), createMaterial('wood', '#3d2516'));
+	chimneyCap.position.set(1.2, 1.6, -0.9);
+	group.add(chimneyCap);
+
+	// Spinning sheet-metal exhaust vent/turbine
+	const ventMat = createMaterial('metallic', '#c0c0c0');
+	const ventBase = new THREE.Mesh(getCylinderGeometry(0.18, 0.22, 0.3, 8), ventMat);
+	ventBase.position.set(-0.8, 1.1, 0.6);
+	group.add(ventBase);
+
+	const ventTurbine = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), ventMat);
+	ventTurbine.position.set(-0.8, 1.35, 0.6);
+	ventTurbine.scale.set(1.2, 0.95, 1.2);
+	group.add(ventTurbine);
+
+	return group;
+}
+
+// Single slope lean-to shed roof
+function buildRoofShed(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#8a5a36');
+	const slateTex = getTileTexture(color);
+	const slateMat = createMaterial(matType, color, slateTex);
+
+	// Single slope large deck, tilted at 15 degrees (~0.26 rad)
+	const deck = new THREE.Mesh(getBoxGeometry(4.2, 0.08, 4.2), slateMat);
+	deck.position.set(0, 0.5, 0);
+	deck.rotation.z = 0.26;
+	group.add(deck);
+
+	// 4 support rafters sticking out below eaves
+	const rafterGeo = getBoxGeometry(4.35, 0.08, 0.08);
+	for (let zOffset of [-1.8, -0.6, 0.6, 1.8]) {
+		const rafter = new THREE.Mesh(rafterGeo, woodMat);
+		rafter.position.set(0, 0.42, zOffset);
+		rafter.rotation.z = 0.26;
+		group.add(rafter);
+	}
+
+	// Side triangular filler walls
+	const leftFillerShape = new THREE.Shape();
+	leftFillerShape.moveTo(-2.0, 0);
+	leftFillerShape.lineTo(2.0, 0);
+	leftFillerShape.lineTo(2.0, 1.0);
+	leftFillerShape.closePath();
+	
+	const fillerMat = createMaterial('matte', '#f0e6d2');
+	
+	const fillerL = new THREE.Mesh(new THREE.ShapeGeometry(leftFillerShape), fillerMat);
+	fillerL.position.set(0, 0.0, -1.98);
+	group.add(fillerL);
+
+	const fillerR = fillerL.clone();
+	fillerR.position.z = 1.98;
+	group.add(fillerR);
+
+	return group;
+}
+
+function buildRoofCurvedTile(color, matType) {
+	const group = new THREE.Group();
+	const woodMat = createMaterial('wood', '#5c3a21');
+	const baseSlateMat = createMaterial('matte', '#a16a38'); // wood base board color
+	const tileMat = createMaterial(matType, color); // primary terracotta color
+
+	// Core slope gables
+	const leftSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.1, 4.15), baseSlateMat);
+	leftSlope.position.set(-1.0, 0.725, 0);
+	leftSlope.rotation.z = Math.atan2(1.2, 2.0);
+	group.add(leftSlope);
+
+	const rightSlope = new THREE.Mesh(getBoxGeometry(2.35, 0.1, 4.15), baseSlateMat);
+	rightSlope.position.set(1.0, 0.725, 0);
+	rightSlope.rotation.z = -Math.atan2(1.2, 2.0);
+	group.add(rightSlope);
+
+	const shape = new THREE.Shape();
+	shape.moveTo(-2, 0);
+	shape.lineTo(2, 0);
+	shape.lineTo(0, 1.2);
+	shape.closePath();
+	const frontG = new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+	frontG.position.set(0, 0.1, 2.0);
+	group.add(frontG);
+
+	const backG = frontG.clone();
+	backG.position.z = -2.0;
+	backG.rotation.y = Math.PI;
+	group.add(backG);
+
+	// Grid of 3D half-cylinders to look like authentic curved tiles!
+	const tileRadius = 0.08;
+	const tileLength = 0.45;
+	const tileGeo = new THREE.CylinderGeometry(tileRadius, tileRadius, tileLength, 6, 1, false, 0, Math.PI);
+	
+	const slopes = [
+		{ side: -1, rotZ: Math.atan2(1.2, 2.0) },
+		{ side: 1, rotZ: -Math.atan2(1.2, 2.0) }
+	];
+
+	slopes.forEach(sl => {
+		for (let row = 0; row < 8; row++) {
+			const sPos = 0.12 + row * 0.28; // along the slope width
+			for (let col = 0; col < 8; col++) {
+				const zPos = -1.75 + col * 0.5; // along the roof depth
+				const tile = new THREE.Mesh(tileGeo, tileMat);
+				
+				const localX = sl.side * sPos;
+				const localY = 0.15 + (1.2 * (2.0 - sPos) / 2.0) + 0.12;
+				
+				tile.position.set(localX, localY, zPos);
+				tile.rotation.z = sl.rotZ + Math.PI / 2; // lie along slope
+				tile.rotation.y = (sl.side === 1 ? Math.PI : 0);
+				
+				tile.castShadow = true;
+				group.add(tile);
+			}
+		}
+	});
+
+	return group;
+}
+
+function buildRoofFabric(color, matType) {
+	const group = new THREE.Group();
+	const poleMat = createMaterial('wood', '#8a5a36');
+	const fabricMat = createMaterial('fabric', color); // defaults to purple fabric #a12b2b
+	const goldMat = createMaterial('metallic', '#cfab51');
+
+	// Central tent pole
+	const pole = new THREE.Mesh(getCylinderGeometry(0.04, 0.04, 1.4, 8), poleMat);
+	pole.position.y = 0.7;
+	group.add(pole);
+
+	// Corner wooden ribs stretching outwards
+	const ribGeo = getBoxGeometry(2.8, 0.03, 0.03);
+	for (let i = 0; i < 2; i++) {
+		const rib = new THREE.Mesh(ribGeo, poleMat);
+		rib.position.y = 0.75;
+		rib.rotation.y = Math.PI / 4 + i * (Math.PI / 2);
+		rib.rotation.z = (i === 0 ? 0.38 : -0.38); // drape downwards
+		group.add(rib);
+	}
+
+	// Main canopy cover fabric draping (4-sided pyramid cone)
+	const canopy = new THREE.Mesh(new THREE.ConeGeometry(2.1 * Math.sqrt(2), 1.1, 4), fabricMat);
+	canopy.position.y = 0.85;
+	canopy.rotation.y = Math.PI / 4; // align faces with borders
+	group.add(canopy);
+
+	// Gold knob finial
+	const knob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), goldMat);
+	knob.position.y = 1.45;
+	group.add(knob);
+
+	// Scalloped canvas valance draping along borders
+	for (let offset of [-1.95, 1.95]) {
+		// North/South draping
+		const valanceNS = new THREE.Mesh(getBoxGeometry(3.9, 0.18, 0.02), fabricMat);
+		valanceNS.position.set(0, 0.22, offset);
+		group.add(valanceNS);
+
+		// East/West draping
+		const valanceEW = new THREE.Mesh(getBoxGeometry(0.02, 0.18, 3.9), fabricMat);
+		valanceEW.position.set(offset, 0.22, 0);
+		group.add(valanceEW);
+	}
+
+	return group;
+}
+
+function buildRoofTurret(color, matType) {
+	const group = new THREE.Group();
+	const stoneMat = createMaterial('matte', '#808e9b'); // gray stone
+	const tileTex = getTileTexture(color);
+	const coneMat = createMaterial(matType, color, tileTex);
+	const goldMat = createMaterial('metallic', '#cfa74e');
+
+	// Note: 2x2 footprint round turret
+	const stoneRoom = new THREE.Mesh(getCylinderGeometry(0.9, 0.9, 0.6, 12), stoneMat);
+	stoneRoom.position.y = 0.3;
+	group.add(stoneRoom);
+
+	const rim = new THREE.Mesh(getCylinderGeometry(1.0, 0.9, 0.15, 12), stoneMat);
+	rim.position.y = 0.675;
+	group.add(rim);
+
+	const cone = new THREE.Mesh(new THREE.ConeGeometry(1.05, 1.5, 12), coneMat);
+	cone.position.y = 1.5;
+	group.add(cone);
+
+	const pole = new THREE.Mesh(getCylinderGeometry(0.02, 0.02, 0.45, 6), goldMat);
+	pole.position.y = 2.45;
+	group.add(pole);
+
+	const arrow = new THREE.Mesh(getBoxGeometry(0.3, 0.02, 0.02), goldMat);
+	arrow.position.y = 2.5;
+	group.add(arrow);
+
+	const arrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.1, 4), goldMat);
+	arrowHead.position.set(0.15, 2.5, 0);
+	arrowHead.rotation.z = -Math.PI / 2;
+	group.add(arrowHead);
+
+	return group;
+}
+
+
 // --- Library Catalog Manifest ---
 
 export const catalog = [
@@ -1694,5 +3076,286 @@ export const catalog = [
 		defaultColor: '#cfa74e',
 		sound: 'glass',
 		createMesh: buildGlowingLamp
+	},
+
+	// 5. Roofs
+	{
+		id: 'roof_s1_pediment',
+		name: 'Scholar Pediment Roof',
+		category: 'roofs',
+		icon: '🏛️',
+		width: 4, height: 1.4, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#2f3542',
+		sound: 'wood',
+		createMesh: buildRoofPediment
+	},
+	{
+		id: 'roof_s2_dome',
+		name: 'Scholar Dome Roof',
+		category: 'roofs',
+		icon: '🕌',
+		width: 4, height: 3.0, depth: 4,
+		materialType: 'matte',
+		defaultColor: '#2b5c54',
+		sound: 'wood',
+		createMesh: buildRoofDome
+	},
+	{
+		id: 'roof_s3_book',
+		name: 'Scholar Book Roof',
+		category: 'roofs',
+		icon: '📖',
+		width: 4, height: 1.4, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#1e3799',
+		sound: 'wood',
+		createMesh: buildRoofBook
+	},
+	{
+		id: 'roof_s4_tower',
+		name: 'Scholar Tower Roof',
+		category: 'roofs',
+		icon: '🏰',
+		width: 4, height: 3.1, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#2f3542',
+		sound: 'wood',
+		createMesh: buildRoofTower
+	},
+	{
+		id: 'roof_s5_mansard',
+		name: 'Scholar Mansard Roof',
+		category: 'roofs',
+		icon: '🏠',
+		width: 4, height: 1.2, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#2f3542',
+		sound: 'wood',
+		createMesh: buildRoofMansard
+	},
+
+	{
+		id: 'roof_m1_curved',
+		name: 'Market Curved Roof',
+		category: 'roofs',
+		icon: '⛺',
+		width: 4, height: 2.1, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#b33939',
+		sound: 'wood',
+		createMesh: buildRoofCurved
+	},
+	{
+		id: 'roof_m2_awning',
+		name: 'Market Awning Roof',
+		category: 'roofs',
+		icon: '🏪',
+		width: 4, height: 1.2, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#cd6133',
+		sound: 'wood',
+		createMesh: buildRoofAwning
+	},
+	{
+		id: 'roof_m3_terrace',
+		name: 'Market Terrace Roof',
+		category: 'roofs',
+		icon: '🪜',
+		width: 4, height: 1.1, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#cd6133',
+		sound: 'wood',
+		createMesh: buildRoofTerrace
+	},
+	{
+		id: 'roof_m4_chimney',
+		name: 'Market Warm Chimney Roof',
+		category: 'roofs',
+		icon: '🪵',
+		width: 4, height: 2.5, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#b33939',
+		sound: 'wood',
+		createMesh: buildRoofWarmChimney
+	},
+	{
+		id: 'roof_m5_gable',
+		name: 'Market Gable Roof',
+		category: 'roofs',
+		icon: '🏠',
+		width: 4, height: 1.4, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#cd6133',
+		sound: 'wood',
+		createMesh: buildRoofGable
+	},
+
+	{
+		id: 'roof_n1_greenhouse',
+		name: 'Nature Greenhouse Roof',
+		category: 'roofs',
+		icon: '🪴',
+		width: 4, height: 2.1, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#218c74',
+		sound: 'glass',
+		createMesh: buildRoofGreenhouse
+	},
+	{
+		id: 'roof_n2_conservatory',
+		name: 'Nature Conservatory Roof',
+		category: 'roofs',
+		icon: '🛖',
+		width: 4, height: 2.8, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#218c74',
+		sound: 'glass',
+		createMesh: buildRoofConservatory
+	},
+	{
+		id: 'roof_n3_living',
+		name: 'Nature Living Roof',
+		category: 'roofs',
+		icon: '🌱',
+		width: 4, height: 1.4, depth: 4,
+		materialType: 'matte',
+		defaultColor: '#2e5c1e',
+		sound: 'wood',
+		createMesh: buildRoofLiving
+	},
+	{
+		id: 'roof_n4_flower_arch',
+		name: 'Nature Flower Arch Roof',
+		category: 'roofs',
+		icon: '🌸',
+		width: 4, height: 2.1, depth: 4,
+		materialType: 'fabric',
+		defaultColor: '#cc3366',
+		sound: 'wood',
+		createMesh: buildRoofFlowerArch
+	},
+	{
+		id: 'roof_n5_leaf',
+		name: 'Nature Leaf Roof',
+		category: 'roofs',
+		icon: '🍃',
+		width: 4, height: 1.5, depth: 4,
+		materialType: 'matte',
+		defaultColor: '#228b22',
+		sound: 'wood',
+		createMesh: buildRoofLeaf
+	},
+
+	{
+		id: 'roof_c1_clock',
+		name: 'Mechanical Clock Roof',
+		category: 'roofs',
+		icon: '🕰️',
+		width: 4, height: 3.4, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#2c3e50',
+		sound: 'wood',
+		createMesh: buildRoofClockTower
+	},
+	{
+		id: 'roof_c2_copper_dome',
+		name: 'Mechanical Copper Dome',
+		category: 'roofs',
+		icon: '🕌',
+		width: 4, height: 3.1, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#4e8075',
+		sound: 'wood',
+		createMesh: buildRoofCopperDome
+	},
+	{
+		id: 'roof_c3_gear',
+		name: 'Mechanical Gear Roof',
+		category: 'roofs',
+		icon: '⚙️',
+		width: 4, height: 1.8, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#7f8c8d',
+		sound: 'wood',
+		createMesh: buildRoofGear
+	},
+	{
+		id: 'roof_c4_observatory',
+		name: 'Mechanical Observatory Roof',
+		category: 'roofs',
+		icon: '🔭',
+		width: 4, height: 2.4, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#34495e',
+		sound: 'wood',
+		createMesh: buildRoofObservatory
+	},
+	{
+		id: 'roof_c5_factory',
+		name: 'Mechanical Factory Roof',
+		category: 'roofs',
+		icon: '🏭',
+		width: 4, height: 1.4, depth: 4,
+		materialType: 'metallic',
+		defaultColor: '#7f8c8d',
+		sound: 'wood',
+		createMesh: buildRoofFactory
+	},
+
+	{
+		id: 'roof_a1_workshop',
+		name: 'Artisan Workshop Roof',
+		category: 'roofs',
+		icon: '🛠️',
+		width: 4, height: 1.7, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#b33939',
+		sound: 'wood',
+		createMesh: buildRoofWorkshop
+	},
+	{
+		id: 'roof_a2_shed',
+		name: 'Artisan Shed Roof',
+		category: 'roofs',
+		icon: '🪵',
+		width: 4, height: 1.1, depth: 4,
+		materialType: 'wood',
+		defaultColor: '#cd6133',
+		sound: 'wood',
+		createMesh: buildRoofShed
+	},
+	{
+		id: 'roof_a3_tile',
+		name: 'Artisan Curved Tile Roof',
+		category: 'roofs',
+		icon: '🧱',
+		width: 4, height: 1.4, depth: 4,
+		materialType: 'matte',
+		defaultColor: '#b33939',
+		sound: 'wood',
+		createMesh: buildRoofCurvedTile
+	},
+	{
+		id: 'roof_a4_fabric',
+		name: 'Artisan Fabric Roof',
+		category: 'roofs',
+		icon: '🎪',
+		width: 4, height: 1.5, depth: 4,
+		materialType: 'fabric',
+		defaultColor: '#6f1e51',
+		sound: 'wood',
+		createMesh: buildRoofFabric
+	},
+	{
+		id: 'roof_a5_turret',
+		name: 'Artisan Turret Roof',
+		category: 'roofs',
+		icon: '🗼',
+		width: 2, height: 2.9, depth: 2,
+		materialType: 'matte',
+		defaultColor: '#4b6584',
+		sound: 'wood',
+		createMesh: buildRoofTurret
 	}
 ];
